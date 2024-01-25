@@ -20,6 +20,10 @@ seed(42)
 torch.random.manual_seed(42)
 np.random.seed(42)
 
+img_path_dataset = '/workspace/as_tom_annotations-all.csv'
+tab_path_dataset = '/workspace/finetuned_df.csv'
+droot = r"/mnt/nas-server/datasets/cardiac/processed/aortic-stenonsis/round2"
+
 # filter out pytorch user warnings for upsampling behaviour
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -73,7 +77,6 @@ def get_as_dataloader(config, split, mode):
     pre-determined splits
 
     '''
-    droot = r"/AS_Neda/as_tom"
     
     if mode=='train':
         flip=config['flip_rate']
@@ -146,9 +149,8 @@ class AorticStenosisDataset(Dataset):
         # dataset_root = dataset_root.replace('~', os.environ['HOME'])
         
         # read in the data directory CSV as a pandas dataframe
-        
-        #dataset = pd.read_csv(join(dataset_root, 'annotations-all.csv'))
-        dataset = pd.read_csv(join('/AS_Neda/as_tom', 'annotations-all.csv'))
+        dataset = pd.read_csv(img_path_dataset)
+        tab_dataset = pd.read_csv(tab_path_dataset, index_col=0)
         
         # append dataset root to each path in the dataframe
         # tip: map(lambda x: x+1) means add 1 to each element in the column
@@ -173,12 +175,21 @@ class AorticStenosisDataset(Dataset):
         # Take train/test/val
         if split in ('train', 'val', 'test', 'ulb'):
             dataset = dataset[dataset['split'] == split]
+            tab_dataset = tab_dataset[tab_dataset['split'] == split]
+            #tab_todo
         elif split == 'train_all':
             dataset = dataset[dataset['split'].isin(['train','ulb'])]
+            tab_dataset = tab_dataset[tab_dataset['split'].isin(['train','ulb'])]
         elif split != 'all':
             raise ValueError(f'View should be train/val/test/all, got {split}')
 
+        #standardize dataset
+            #TODO
+        #mean imputation of dataset...
+            #TODO
+
         self.dataset = dataset
+        self.tabular_dataset = tab_dataset
         self.frames = frames
         self.resolution = (resolution, resolution)
         self.split = split
@@ -257,6 +268,10 @@ class AorticStenosisDataset(Dataset):
     def __getitem__(self, item):
         data_info = self.dataset.iloc[item]
 
+        #get associated tabular data based on echo ID
+        #TODO - study_num = data_info['Echo ID#']
+        #TODO - tab_info = self.tabular_dataset.iloc[study_num]
+
         cine_original = self.cine_loader(data_info['path'])
         #folder = data_info['Study_Folder']
         folder = 'round2'
@@ -308,14 +323,17 @@ class AorticStenosisDataset(Dataset):
         #cine = self.pack_transform(cine)
         if (self.contrstive == 'SupCon' or self.contrstive =='SimCLR') and (self.split == 'train' or self.split =='train_all'):
             ret = ([cine,cine_aug], labels_AS, labels_B)
+            #TODO - update ret to include associated values in tabular dataset
        
         else:
             ret = (cine, labels_AS, labels_B)
+            #TODO - update ret to include associated values in tabular dataset
         if self.return_info:
             di = data_info.to_dict()
             di['window_length'] = window_length
             di['original_length'] = cine_original.shape[1]
             ret = (cine, labels_AS, labels_B, di, cine_original)
+            #TODO - update ret to include associated values in tabular dataset
 
         return ret
 

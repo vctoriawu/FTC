@@ -4,7 +4,7 @@ from transformers import BertConfig, BertModel
 import torch
 import torchvision
 import torch.nn as nn
-from ResNetAE.ResNetAE import ResNetAE
+#from ResNetAE.ResNetAE import ResNetAE
 
 class Reduce(nn.Module):
     def __init__(self):

@@ -2,10 +2,10 @@ from torchvision.models.video import r2plus1d_18
 import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
-from FTC.FTC import get_model_b
+#from FTC.FTC import get_model_b
 from FTC.FTC_resnet18 import get_model_res18
 from FTC.FTC_TAD import get_model_tad
-from ResNetAE.ResNetAE import ResNetAE
+#from ResNetAE.ResNetAE import ResNetAE
 import torch
 #from pytorchvideo.models import x3d, resnet, slowfast
 

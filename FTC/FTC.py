@@ -3,7 +3,7 @@ from torch.nn.modules.dropout import Dropout
 from transformers import BertConfig, BertModel
 import torch
 import torch.nn as nn
-from ResNetAE.ResNetAE import ResNetAE
+#from ResNetAE.ResNetAE import ResNetAE
 
 class Reduce(nn.Module):
     def __init__(self):
@@ -102,43 +102,43 @@ class FTC(nn.Module):
             as_prediction = None
         return as_prediction
 
-def get_model_b(emb_dim, img_per_video, 
-              num_hidden_layers = 16,
-              intermediate_size = 8192,
-              rm_branch = None,
-              use_conv = False,
-              attention_heads=16
-              ):
-    # https://huggingface.co/transformers/model_doc/bert.html#bertconfig
-    # https://huggingface.co/transformers/model_doc/bert.html#bertfortokenclassification
-    # Setup model
-    configuration = BertConfig(
-        vocab_size=1, # Set to 0/None ?
-        hidden_size=emb_dim, # Length of embeddings
-        num_hidden_layers=num_hidden_layers, # 16
-        num_attention_heads=attention_heads, 
-        intermediate_size=intermediate_size, # 8192
-        hidden_act='gelu', 
-        hidden_dropout_prob=0.1, 
-        attention_probs_dropout_prob=0.1, 
-        max_position_embeddings=1024, # 64 ?
-        type_vocab_size=1, 
-        initializer_range=0.02, 
-        layer_norm_eps=1e-12, 
-        pad_token_id=0, 
-        gradient_checkpointing=False, 
-        position_embedding_type='absolute', 
-        use_cache=True)
-    configuration.num_labels = 4 # 4
+# def get_model_b(emb_dim, img_per_video, 
+#               num_hidden_layers = 16,
+#               intermediate_size = 8192,
+#               rm_branch = None,
+#               use_conv = False,
+#               attention_heads=16
+#               ):
+#     # https://huggingface.co/transformers/model_doc/bert.html#bertconfig
+#     # https://huggingface.co/transformers/model_doc/bert.html#bertfortokenclassification
+#     # Setup model
+#     configuration = BertConfig(
+#         vocab_size=1, # Set to 0/None ?
+#         hidden_size=emb_dim, # Length of embeddings
+#         num_hidden_layers=num_hidden_layers, # 16
+#         num_attention_heads=attention_heads, 
+#         intermediate_size=intermediate_size, # 8192
+#         hidden_act='gelu', 
+#         hidden_dropout_prob=0.1, 
+#         attention_probs_dropout_prob=0.1, 
+#         max_position_embeddings=1024, # 64 ?
+#         type_vocab_size=1, 
+#         initializer_range=0.02, 
+#         layer_norm_eps=1e-12, 
+#         pad_token_id=0, 
+#         gradient_checkpointing=False, 
+#         position_embedding_type='absolute', 
+#         use_cache=True)
+#     configuration.num_labels = 4 # 4
     
-    model_T  = BertModel(configuration).encoder
+#     model_T  = BertModel(configuration).encoder
     
-    model_AE = ResNetAE(input_shape=(224, 224, 3), n_ResidualBlock=8, n_levels=4, bottleneck_dim=emb_dim)
-    model_AE.decoder = None
-    model_AE.fc2 = None
+    #model_AE = ResNetAE(input_shape=(224, 224, 3), n_ResidualBlock=8, n_levels=4, bottleneck_dim=emb_dim)
+    #model_AE.decoder = None
+    #model_AE.fc2 = None
     
-    num_berts = num_hidden_layers if use_conv else None
+    #num_berts = num_hidden_layers if use_conv else None
         
-    model = FTC(model_AE, model_T, img_per_video, emb_dim, rm_branch=rm_branch, num_hidden_layers=num_berts,pretrained = True) 
+    #model = FTC(model_AE, model_T, img_per_video, emb_dim, rm_branch=rm_branch, num_hidden_layers=num_berts,pretrained = True) 
     
-    return model
+    #return model
