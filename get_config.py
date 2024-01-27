@@ -2,11 +2,12 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
-    config['mode'] = "test"
+    config['mode'] = "train"
     config['use_wandb'] = False
     config['use_cuda'] = True
-    config['log_dir'] = "/AS_Neda/FTC/logs"
+    config['log_dir'] = "/workspace/miccai2024/FTC/logs"
     config['model_load_dir'] = None # required for test-only mode
+    config['best_model_path'] = '/workspace/miccai2024/FTC/logs/tad_1e-4/best_model.pth'
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
@@ -15,6 +16,14 @@ def get_config():
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
     config['num_classes'] = 4
+
+    #Hyperaparameters for tabular dataset.
+    config['scale_feats'] = True
+    config['num_ex'] = None
+    config['drop_cols'] = []
+    config['categorical_cols'] = []
+    
+
     
     # Hyperparameters for bicuspid valve branch
     # config['bicuspid_weight'] = 1.0 # default is 1.0

@@ -67,6 +67,7 @@ class Network(object):
         self.pos , self.neg = NPairsample()
         if config['cotrastive_method']=='Linear':
             checkpoint = torch.load(Path('/AS_Neda/FTC/logs/tad_1e-4_added_losses_try2/checkpoint.pth'))
+            #TODO - change path
             self.model.load_state_dict(checkpoint["model"], strict=False)
             print("Checkpoint_loaded")
         if self.config['use_cuda']:  
@@ -119,9 +120,9 @@ class Network(object):
         self.checkpts_file = os.path.join(self.log_dir, "checkpoint.pth")
 
         # We save model that achieves the best performance: early stopping strategy.
-        #self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
-        self.bestmodel_file = Path('/AS_Neda/FTC/logs/tad_1e-4_tclloss_batch16/best_model.pth')
+        self.bestmodel_file = Path(self.config['best_model_path'])
         self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
+        #TODO - change paths
         
         # For test, we also save the results dataframe
         self.test_results_file = os.path.join(self.log_dir, "best_model.pth")
@@ -223,8 +224,9 @@ class Network(object):
             with tqdm(total=len(loader_tr)) as pbar:
                 for data in loader_tr:
                     cine = data[0]
-                    target_AS = data[1]
-                    target_B = data[2]
+                    tab_data = data[1]
+                    target_AS = data[2]
+                    target_B = data[3]
 
                     # Cross Entropy Training
                     if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == "Linear":
@@ -234,10 +236,12 @@ class Network(object):
                                 cine = [c.cuda() for c in cine]
                             else:
                                 cine = cine.cuda()
+                            tab_data = tab_data.cuda()
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, _ = self.model(cine) # Bx3xTxHxW
+                            #the output for FTC-TAD is this: as_prediction,entropy_attention,outputs,att_weight
                             
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -366,8 +370,8 @@ class Network(object):
         losses = []
         for data in tqdm(loader_te):
             cine = data[0]
-            target_AS = data[1]
-            target_B = data[2]
+            target_AS = data[2]
+            target_B = data[3]
             # Transfer data from CPU to GPU.
             # Cross Entropy Training
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == "Linear":

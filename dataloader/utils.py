@@ -1,8 +1,203 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import imageio as iio
 import os
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.compose import make_column_transformer
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.base import TransformerMixin
+from sklearn.utils.validation import check_array
+from typing import List, Dict, Union, Tuple
 
+#utils from tabular transformer finetuning branch
+def preprocess_as_data(train, val, test, cat_cols):
+
+    #train = train.replace(-1, np.nan)
+    #val = val.replace(-1, np.nan)
+    #test = test.replace(-1, np.nan)
+    
+    # Remove non numerical features
+    numeric_feats = train.columns.to_list().copy()
+    numeric_feats = [col for col in numeric_feats if col not in cat_cols]
+    numeric_feats.remove('as_label')
+
+    # Replace any missing values in the categorical columns with -1
+    train[cat_cols] = train[cat_cols].fillna(-1)
+    val[cat_cols] = val[cat_cols].fillna(-1)
+    test[cat_cols] = test[cat_cols].fillna(-1) 
+
+    processor = make_column_transformer(
+        (GaussianImputerGivenMean(strategy='mean', mean=1.5, std=0.3), ['VPeak']),
+        remainder='passthrough'
+    )
+
+    # Create a new list without 'VPeak' - this is a current hack for the imputation and can be cleaned up
+    new_numeric_feats = [feat for feat in numeric_feats if feat != 'VPeak']
+    all_columns = ['VPeak'] + new_numeric_feats + cat_cols
+
+    pipe = make_pipeline(StandardScaler(), GaussianImputer())
+    processor2 = make_column_transformer(
+        (pipe, numeric_feats),
+        remainder='passthrough'
+    )
+
+    # get normalized versions and PeakV of each set for numeric features only
+    train_temp = pd.DataFrame(processor.fit_transform(train.drop(columns=['as_label'])), columns=all_columns, index=train.index)
+    val_temp = pd.DataFrame(processor.transform(val.drop(columns=['as_label'])), columns=all_columns, index=val.index)
+    test_temp = pd.DataFrame(processor.transform(test.drop(columns=['as_label'])), columns=all_columns, index=test.index)
+
+    # get imputed versions of each set for numeric features only
+    # imputation for Peak gradient
+    train_temp = fill_peak_gradient(train_temp)
+    val_temp = fill_peak_gradient(val_temp)
+    test_temp = fill_peak_gradient(test_temp)
+
+    #iterative imputation for the remaining columns?
+    train_impute = pd.DataFrame(processor2.fit_transform(train_temp), columns=all_columns, index=train.index)
+    val_impute = pd.DataFrame(processor2.transform(val_temp), columns=all_columns, index=val.index)
+    test_impute = pd.DataFrame(processor2.transform(test_temp), columns=all_columns, index=test.index)
+
+    # train = train.replace(np.nan, -1)
+    # val = val.replace(np.nan, -1)
+    # test = test.replace(np.nan, -1)
+
+    # create a dataset with each of these
+    # train_set = ASDataset(train, train_impute, all_columns)
+    # val_set = ASDataset(val, val_impute, all_columns)
+    # test_set = ASDataset(test, test_impute, all_columns)
+
+    return (train_impute, val_impute, test_impute, all_columns)
+
+def load_as_data(csv_path: str,
+                    drop_cols : Union[List[str], None] = None,
+                    num_ex : Union[int, None] = None,
+                    test_split : float = 0.1,
+                    random_seed : Union[int, None] = None,
+                    scale_feats : bool = True
+                    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: 
+        """Processes data for imputation models.
+
+        Imputes missing values with average of feature and optionally drops columns and scales all 
+        data to be normally distributed.
+        
+        Args:
+            csv_path: Path to the dataset to use. Should be a csv file.
+            drop_cols: List of columns to drop from dataset. If None, no columns are dropped.
+            num_ex: Number of examples to use. If None, will use all available examples.
+            test_split: What fraction of total data to use in test set. Also used to split
+                validation data after test data has been separated.
+            random_seed: Seed to initialize randomized operations.
+            scale_feats: Whether to scale numeric features in dataset during preprocessing.
+
+        Returns:
+            Tuple of (train_dataset, validation_dataset, test_dataset).
+            Each is a processed pandas DataFrame.
+
+        Raises:
+            Exception: Specified more examples to use than exist in the dataset.
+        """
+
+        data_df = pd.read_csv(csv_path, index_col=0)
+        data_df = data_df.drop("AV stenosis", axis=1)
+        data_df = data_df.drop("age", axis=1)
+
+        #If num_ex is None use all examples in dataset
+        if not num_ex:
+            num_ex = data_df.shape[0]
+
+        #Ensure number of examples specified is not greater than examples in the dataset
+        elif num_ex > data_df.shape[0]:
+            ex_string = "Specified " + str(num_ex) + " examples to use but there are only " + str(nan_df.shape[0]) + " examples with known target column in dataset."
+            raise Exception(ex_string)
+        
+
+        #Create description of processing and store
+        print("Processing data from: " + csv_path + "\n")
+        print("Dropping the following columns: " + str(drop_cols) + "\n")
+        print("Using " + str(num_ex) + " examples with test split of " + str(test_split) + ".\n")
+        print("Random seed is " + str(random_seed) + ".\n")
+        print("Scaling features? " + str(scale_feats) + "\n")
+
+        #Replace any -1 values with NaNs for imputing
+        #nan_df = data_df.replace(-1, np.nan)
+        
+        #Sample data to only contain num_ex rows
+        sampled_df = data_df.sample(n=num_ex, random_state=random_seed)
+
+        #If drop columns is not empty, drop specified. Otherwise keep DataFrame as is
+        drop_cols_df = sampled_df.drop(columns=drop_cols) if drop_cols else sampled_df
+
+        #Split into train, test, and validation sets
+        train_df = drop_cols_df[drop_cols_df['split'] == 'train'].drop(columns=['split'])
+        val_df = drop_cols_df[drop_cols_df['split'] == 'val'].drop(columns=['split'])
+        test_df = drop_cols_df[drop_cols_df['split'] == 'test'].drop(columns=['split'])
+
+        print("\nTrain dataset shape:", train_df.shape)
+        print("Validation dataset shape:", val_df.shape)
+        print("Test dataset shape:", test_df.shape,"\n")
+
+        return (train_df, val_df, test_df)
+
+def fill_peak_gradient(df):
+    # Find rows where 'AoPG' is NaN
+    missing_ao_rows = df['AoPG'].isna()
+
+    # Replace NaN values in 'AoPG' with the calculated values based on the formula
+    df.loc[missing_ao_rows, 'AoPG'] = 4 * (df.loc[missing_ao_rows, 'VPeak']**2)
+
+    return df
+
+class GaussianImputer(TransformerMixin):
+    def __init__(self, random_state=None):
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        self.means_ = np.nanmean(X, axis=0)
+        self.stddevs_ = np.nanstd(X, axis=0)
+        return self
+
+    def transform(self, X):
+        X = check_array(X, force_all_finite=False)
+
+        for i in range(X.shape[1]):
+            nan_mask = np.isnan(X[:, i])
+            num_missing = np.sum(nan_mask)
+            if num_missing > 0:
+                random_values = np.random.normal(loc=self.means_[i], scale=self.stddevs_[i], size=num_missing)
+                X[nan_mask, i] = random_values
+
+        return X
+    
+class GaussianImputerGivenMean(SimpleImputer):
+    def __init__(self, strategy='mean', fill_value=None, mean=None, std=None, **kwargs):
+        self.mean = mean
+        self.std = std
+        super().__init__(strategy=strategy, fill_value=fill_value, **kwargs)
+
+    def transform(self, X):
+
+        # Get the indices of missing values in the column
+        missing_indices = np.where(np.isnan(X))[0]
+
+        # Generate random samples from a Gaussian distribution around mean=1.5
+        fill_values = np.random.normal(loc=self.mean, scale=self.std, size=len(missing_indices))
+
+        # Clip values to ensure they are not less than 0
+        fill_values = np.clip(fill_values, 0, None)
+
+        # Reshape the fill_values array to be a column vector
+        fill_values = fill_values.reshape(-1, 1)
+
+        # Create a new DataFrame and replace the original one
+        new_X = X.copy()
+        new_X.iloc[missing_indices] = fill_values
+
+        return new_X
+
+#utils from Neda's original code
 def update_confusion_matrix(mat, true, pred):
     '''
     updates a confusion matrix in numpy based on target/pred results

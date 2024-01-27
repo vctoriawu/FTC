@@ -9,12 +9,14 @@ from scipy.io import loadmat
 from skimage.transform import resize
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torchvision.transforms import Compose
-from torchvision.transforms._transforms_video import RandomResizedCropVideo, RandomHorizontalFlipVideo
+#from torchvision.transforms._transforms_video import RandomResizedCropVideo, RandomHorizontalFlipVideo
+from torchvision.transforms import RandomResizedCrop, RandomHorizontalFlip
 import warnings
 from random import lognormvariate
 from random import seed
 import torch.nn as nn
 import random
+from dataloader.utils import load_as_data, preprocess_as_data
 
 seed(42)
 torch.random.manual_seed(42)
@@ -22,7 +24,8 @@ np.random.seed(42)
 
 img_path_dataset = '/workspace/as_tom_annotations-all.csv'
 tab_path_dataset = '/workspace/finetuned_df.csv'
-droot = r"/mnt/nas-server/datasets/cardiac/processed/aortic-stenonsis/round2"
+dataset_root = r"/mnt/nas-server/published/vaseli_ProtoASNet_MICCAI2023/data_removelater/as_tom"
+cine_loader = 'mat_loader'
 
 # filter out pytorch user warnings for upsampling behaviour
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -105,17 +108,59 @@ def get_as_dataloader(config, split, mode):
         fr = 32
     else:
         fr = 16
+    
+    # read in the data directory CSV as a pandas dataframe
+    dataset = pd.read_csv(img_path_dataset)
         
-    dset = AorticStenosisDataset(dataset_root=droot, 
+    # append dataset root to each path in the dataframe
+    dataset['path'] = dataset['path'].map(lambda x: join(dataset_root, x))
+    view = config['view']
+        
+    if view in ('plax', 'psax'):
+        dataset = dataset[dataset['view'] == view]
+    elif view != 'all':
+        raise ValueError(f'View should be plax, psax or all, got {view}')
+       
+    # remove unnecessary columns in 'as_label' based on label scheme
+    label_scheme_name = config['label_scheme_name']
+    scheme = label_schemes[label_scheme_name]
+    dataset = dataset[dataset['as_label'].isin( scheme.keys() )]
+
+    #load tabular dataset
+    tab_train, tab_val, tab_test = load_as_data(csv_path = tab_path_dataset,
+                                                drop_cols = config['drop_cols'],
+                                                num_ex = config['num_ex'],
+                                                scale_feats = config['scale_feats'])
+                                                
+
+    #perform imputation 
+    train_set, val_set, test_set, all_cols = preprocess_as_data(tab_train, tab_val, tab_test, config['categorical_cols'])
+    
+    # Take train/test/val
+    if split in ('train', 'val', 'test', 'ulb'):
+        dataset = dataset[dataset['split'] == split]
+        if split=='train':
+            tab_dataset = train_set
+        elif split=='val':
+            tab_dataset = val_set
+        elif split=='test':
+            tab_dataset = test_set
+    elif split == 'train_all':
+        dataset = dataset[dataset['split'].isin(['train','ulb'])]
+        tab_dataset = train_set
+    elif split != 'all':
+        raise ValueError(f'View should be train/val/test/all, got {split}')
+        
+    dset = AorticStenosisDataset(img_path_dataset=dataset, 
+                                tab_dataset=tab_dataset,
                                 split=split,
-                                view=config['view'],
                                 transform=tra,
                                 normalize=True,
                                 frames=fr,
                                 return_info=show_info,
                                 contrastive_method = config['cotrastive_method'],
                                 flip_rate=flip,
-                                label_scheme_name=config['label_scheme_name'])
+                                label_scheme = scheme)
     
     if mode=='train':
         if config['sampler'] == 'AS':
@@ -132,64 +177,26 @@ def get_as_dataloader(config, split, mode):
     
 
 class AorticStenosisDataset(Dataset):
-    def __init__(self, dataset_root: str = '~/as', view: str = 'plax',
+    def __init__(self, 
+                 label_scheme,
+                 img_path_dataset,
+                 tab_dataset,
                  split: str = 'train',
                  transform: bool = True, normalize: bool = True, 
                  frames: int = 16, resolution: int = 224,
-                 cine_loader: str = 'mat_loader', return_info: bool = False,
+                 cine_loader: str = 'mat_loader', return_info: bool = False, #TODO
                  contrastive_method: str = 'CE',
                  flip_rate: float = 0.3, min_crop_ratio: float = 0.8, 
                  hr_mean: float = 4.237, hr_std: float = 0.1885,
-                 label_scheme_name: str = 'all',
                  **kwargs):
-        # if normalize: # TODO normalization might be key to improving accuracy
-        #     raise NotImplementedError('Normalization is not yet supported, data will be in the range [0-1]')
 
-        # navigation for linux environment
-        # dataset_root = dataset_root.replace('~', os.environ['HOME'])
-        
-        # read in the data directory CSV as a pandas dataframe
-        dataset = pd.read_csv(img_path_dataset)
-        tab_dataset = pd.read_csv(tab_path_dataset, index_col=0)
-        
-        # append dataset root to each path in the dataframe
-        # tip: map(lambda x: x+1) means add 1 to each element in the column
-        dataset['path'] = dataset['path'].map(lambda x: join(dataset_root, x))
-        
-        if view in ('plax', 'psax'):
-            dataset = dataset[dataset['view'] == view]
-        elif view != 'all':
-            raise ValueError(f'View should be plax, psax or all, got {view}')
-       
-        # remove unnecessary columns in 'as_label' based on label scheme
-        self.scheme = label_schemes[label_scheme_name]
-        dataset = dataset[dataset['as_label'].isin( self.scheme.keys() )]
-        # # modify those values to their numerical counterparts
-        # dataset['as_label'] = dataset['as_label'].map(lambda x: self.scheme[x])
-
-        self.cine_loader = get_loader(cine_loader)
         self.return_info = return_info
         self.hr_mean = hr_mean
         self.hr_srd = hr_std
-
-        # Take train/test/val
-        if split in ('train', 'val', 'test', 'ulb'):
-            dataset = dataset[dataset['split'] == split]
-            tab_dataset = tab_dataset[tab_dataset['split'] == split]
-            #tab_todo
-        elif split == 'train_all':
-            dataset = dataset[dataset['split'].isin(['train','ulb'])]
-            tab_dataset = tab_dataset[tab_dataset['split'].isin(['train','ulb'])]
-        elif split != 'all':
-            raise ValueError(f'View should be train/val/test/all, got {split}')
-
-        #standardize dataset
-            #TODO
-        #mean imputation of dataset...
-            #TODO
-
-        self.dataset = dataset
-        self.tabular_dataset = tab_dataset
+        self.scheme = label_scheme
+        self.cine_loader = get_loader(cine_loader)
+        self.dataset = img_path_dataset
+        self.tab_dataset = tab_dataset
         self.frames = frames
         self.resolution = (resolution, resolution)
         self.split = split
@@ -198,14 +205,20 @@ class AorticStenosisDataset(Dataset):
         self.pack_transform = PackPathway(alpha=4)
         if transform:
             self.transform = Compose(
-                [RandomResizedCropVideo(size=self.resolution, scale=(min_crop_ratio, 1)),
-                 RandomHorizontalFlipVideo(p=flip_rate)]
+                [RandomResizedCrop(size=self.resolution, scale=(min_crop_ratio, 1)),
+                 RandomHorizontalFlip(p=flip_rate)]
             )
+            #     [RandomResizedCropVideo(size=self.resolution, scale=(min_crop_ratio, 1)),
+            #      RandomHorizontalFlipVideo(p=flip_rate)]
+            # )
         if contrastive_method!= 'CE':
             self.transform_contrastive = Compose(
-                [RandomResizedCropVideo(size=self.resolution, scale=(min_crop_ratio, 1)),
-                 RandomHorizontalFlipVideo(p=flip_rate)]
+                [RandomResizedCrop(size=self.resolution, scale=(min_crop_ratio, 1)),
+                 RandomHorizontalFlip(p=flip_rate)]
             )
+            #     [RandomResizedCropVideo(size=self.resolution, scale=(min_crop_ratio, 1)),
+            #      RandomHorizontalFlipVideo(p=flip_rate)]
+            # )
             
         self.normalize = normalize
         self.contrstive = contrastive_method
@@ -269,11 +282,13 @@ class AorticStenosisDataset(Dataset):
         data_info = self.dataset.iloc[item]
 
         #get associated tabular data based on echo ID
-        #TODO - study_num = data_info['Echo ID#']
-        #TODO - tab_info = self.tabular_dataset.iloc[study_num]
+        study_num = data_info['Echo ID#']
+        tab_info = self.tab_dataset.loc[int(study_num)]
+        tab_info = torch.tensor(tab_info.values)
+        #If study num for tabular dataset does not exist, print out exception...
+            #TODO
 
         cine_original = self.cine_loader(data_info['path'])
-        #folder = data_info['Study_Folder']
         folder = 'round2'
         if folder == 'all_cines':
             cine_original = cine_original.transpose((2,0,1))
@@ -322,18 +337,15 @@ class AorticStenosisDataset(Dataset):
         # slowFast input transformation
         #cine = self.pack_transform(cine)
         if (self.contrstive == 'SupCon' or self.contrstive =='SimCLR') and (self.split == 'train' or self.split =='train_all'):
-            ret = ([cine,cine_aug], labels_AS, labels_B)
-            #TODO - update ret to include associated values in tabular dataset
+            ret = ([cine,cine_aug], tab_info, labels_AS, labels_B)
        
         else:
-            ret = (cine, labels_AS, labels_B)
-            #TODO - update ret to include associated values in tabular dataset
+            ret = (cine, tab_info, labels_AS, labels_B)
         if self.return_info:
             di = data_info.to_dict()
             di['window_length'] = window_length
             di['original_length'] = cine_original.shape[1]
-            ret = (cine, labels_AS, labels_B, di, cine_original)
-            #TODO - update ret to include associated values in tabular dataset
+            ret = (cine, tab_info, labels_AS, labels_B, di, cine_original)
 
         return ret
 

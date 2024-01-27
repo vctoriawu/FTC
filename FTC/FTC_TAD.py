@@ -85,7 +85,6 @@ class FTC(nn.Module):
         self.em = embedding_dim
         
     def forward(self, x):   
-        
         # Video dimension (B x F x C x H x W)
         x = x.permute(0,2,1,3,4)
         
