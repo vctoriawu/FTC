@@ -8,7 +8,66 @@ import torchvision
 from FTC.posembedding import build_position_encoding
 from FTC.deformable_transformer import DeformableTransformer
 from FTC.util.misc import NestedTensor
+from einops import rearrange
 
+class CrossAttention(nn.Module):
+    """
+    Apply cross attention between x tensor and tab_x tensor.
+
+    Arguments:
+        dim: 
+        context_dim:
+        heads: number of attention heads.
+        dim_head: dimension of q, k, v 
+    
+
+
+    """
+    def __init__(
+        self,
+        dim=1024, #dimension of img input
+        context_dim=1024, #dimension of tab input
+        heads = 12,
+        dim_head = 64,
+        dropout = 0.
+    ):
+        super().__init__()
+        inner_dim = dim_head * heads
+
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+
+        self.to_q = nn.Linear(dim, inner_dim, bias = False)
+        self.to_k = nn.Linear(context_dim, inner_dim, bias = False)
+        self.to_v = nn.Linear(context_dim, inner_dim, bias = False)
+        self.to_out = nn.Linear(inner_dim, dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, tab_x):
+        
+        #get shape of video input
+        b, f, _ = x.shape
+        h = self.heads
+        kv_input = tab_x
+        # q, k, v = self.to_q(x), self.to_k(kv_input), self.to_v(kv_input)
+        q = self.to_q(x)
+        k = self.to_k(kv_input)
+        v = self.to_v(kv_input)
+        q, k, v = map(lambda t: rearrange(tensor=t, pattern='b f (h d) -> b h f d', h=h), (q, k, v))
+        q = q * self.scale
+        sim = torch.einsum('b h i d, b h j d -> b h i j', q, k)
+
+        # attention
+        attn = sim.softmax(dim = -1) 
+        attn = self.dropout(attn)
+
+        # aggregate
+        out = torch.einsum('b h i j, b h j d -> b h i d', attn, v)
+        
+        # merge heads
+        out = rearrange(out, 'b h f d -> b f (h d)')
+        
+        return self.to_out(out)
 
 class Reduce(nn.Module):
     def __init__(self):
@@ -42,13 +101,25 @@ class Inception(nn.Module):
         
 # New Multi Branch Auto Encoding Transformer
 class FTC(nn.Module):
-    def __init__(self, AE, pos_embed , transformer, embedding_dim, pretrained = False):
+    def __init__(self, 
+                AE, 
+                pos_embed, 
+                transformer, 
+                embedding_dim, 
+                use_tab, 
+                cross_attention, 
+                tab_input_dim, 
+                tab_emb_dims, 
+                pretrained = False):
         super(FTC, self).__init__()
         
         last_features = 4
         self.pretrained = pretrained
+        self.use_tab = use_tab
+        self.tab_input_dim = tab_input_dim
+        self.tab_emb_dims = tab_emb_dims
         
-        
+        self.cross_attention = cross_attention
         self.AE = AE
         if self.pretrained == True:
             from pathlib import Path
@@ -62,6 +133,14 @@ class FTC(nn.Module):
 
         self.pos_embed = pos_embed
         self.transformer = transformer
+        self.tab_embed = nn.Sequential(
+            nn.Linear(in_features=self.tab_input_dim, out_features=self.tab_emb_dims[0]),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=self.tab_emb_dims[0], out_features=tab_emb_dims[1]),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_features=tab_emb_dims[1], out_features=tab_emb_dims[2]),
+            nn.ReLU(inplace=True)
+        )
         
         self.aorticstenosispred = nn.Sequential(
             nn.Linear(in_features=embedding_dim, out_features=embedding_dim//2, bias=True),
@@ -84,7 +163,7 @@ class FTC(nn.Module):
         #self.vf = frames_per_video
         self.em = embedding_dim
         
-    def forward(self, x):   
+    def forward(self, x, tab_x):   
         # Video dimension (B x F x C x H x W)
         x = x.permute(0,2,1,3,4)
         
@@ -112,9 +191,19 @@ class FTC(nn.Module):
         pos = self.pos_embed(samples).cuda()
         
         #  B x F x Emb
-
         outputs = self.transformer([embeddings_reshaped],[pos],[mask])
-        
+
+        #integrate tab data
+        if self.use_tab:
+            tab_x = torch.unsqueeze(tab_x, dim=-1) 
+            
+            # B x F x 1
+            #Tranform x feature values to higher dim using a shared mlp layer
+            tab_x = self.tab_embed(tab_x)
+
+            #cross attention between video and tabular embeddings
+            outputs = self.cross_attention(outputs, tab_x)
+
         method = "attention"   # "average","emb_mag","attention",
         if method == "average":
             # B x F x Emb => B x T x 4
@@ -159,12 +248,16 @@ class FTC(nn.Module):
 
         return as_prediction,entropy_attention,outputs,att_weight
 
-def get_model_tad(emb_dim, img_per_video, 
+def get_model_tad(emb_dim, 
+              tab_input_dim, 
+              tab_emb_dims, 
+              img_per_video, 
               num_hidden_layers = 16,
               intermediate_size = 8192,
               rm_branch = None,
               use_conv = False,
-              attention_heads=16
+              attention_heads=16,
+              use_tab=True
               ):
     
     model_res = torchvision.models.resnet18()
@@ -184,7 +277,21 @@ def get_model_tad(emb_dim, img_per_video,
             num_feature_levels=1,
             dec_n_points=4,
             enc_n_points=4)
+    
+    cross_attention = CrossAttention(dim=1024, 
+        context_dim=tab_emb_dims[2], 
+        heads = 12,
+        dim_head = 64,
+        dropout = 0.)
         
-    model = FTC(model_res,pos_embed,transformer, emb_dim,pretrained = False) 
+    model = FTC(AE=model_res,
+                pos_embed=pos_embed,
+                transformer=transformer, 
+                embedding_dim=emb_dim, 
+                use_tab=use_tab, 
+                cross_attention=cross_attention, 
+                tab_input_dim=tab_input_dim, 
+                tab_emb_dims=tab_emb_dims, 
+                pretrained=False) 
     
     return model

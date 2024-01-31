@@ -17,9 +17,6 @@ from utils import validation_constructive
 from pathlib import Path
 from sklearn.metrics import confusion_matrix
 
-
-
-
 class TransformerFeatureMap:
     def __init__(self, model, layer_name='avgpool'):
         self.model = model
@@ -82,8 +79,8 @@ class Network(object):
         else:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,T_max=config['num_epochs'])
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
+                                                                    T_max=config['num_epochs'])
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
         self.temperature = config['temp']
@@ -118,15 +115,34 @@ class Network(object):
 
         # File that we save trained model into.
         self.checkpts_file = os.path.join(self.log_dir, "checkpoint.pth")
-
         # We save model that achieves the best performance: early stopping strategy.
-        self.bestmodel_file = Path(self.config['best_model_path'])
+        self.best_model_dir = self.config['best_model_dir']
+        if not os.path.exists(self.best_model_dir):
+            os.makedirs(self.best_model_dir)      
+        self.bestmodel_file = os.path.join(self.best_model_dir, 'best_model.pth')
         self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
-        #TODO - change paths
-        
         # For test, we also save the results dataframe
         self.test_results_file = os.path.join(self.log_dir, "best_model.pth")
- 
+
+        #TODO
+        # if self.config['use_tab']:
+        #     self.checkpts_file = os.path.join(self.log_dir, "multimodal_checkpoint.pth")
+
+        # if self.config['use_tab']:
+        #     self.bestmodel_file = os.path.join(self.best_model_dir, 'best_multimodal_model.pth')
+        # else:
+        #     self.bestmodel_file = os.path.join(self.best_model_dir, 'best_model.pth')
+
+        # if self.config['use_tab']:
+        #     self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_multimodalmodel_cont.pth")
+        # else:
+        #     self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
+
+        # if self.config['use_tab']:
+        #     self.test_results_file = os.path.join(self.log_dir, "best_multimodal_model.pth")
+        # else:
+        #     self.test_results_file = os.path.join(self.log_dir, "best_model.pth")
+
     
     def _save(self, pt_file):
         """Saving trained model."""
@@ -134,7 +150,6 @@ class Network(object):
         # Save the trained model.
         torch.save(
             {
-                #"model": self.model.module.state_dict(),
                 "model": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
             },
@@ -203,9 +218,6 @@ class Network(object):
         uni = utils.test_unimodality(prob.cpu().numpy())
         return argm, max_percentage, entropy, vacuity, uni
         
-    # def get_lr(self):
-    #     return self.scheduler.get_lr()
-        
     def train(self, loader_tr, loader_va,loader_te):
         """Training pipeline."""
         # Switch model into train mode.
@@ -213,7 +225,6 @@ class Network(object):
         best_va_acc = 0.0 # Record the best validation metrics.
         best_va_acc_supcon = 0.0
         best_cont_loss = 1000
-        #best_B_f1 = 0.0
             
         for epoch in range(self.config['num_epochs']):
             #losses_AS = []
@@ -240,8 +251,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _ = self.model(cine) # Bx3xTxHxW
-                            #the output for FTC-TAD is this: as_prediction,entropy_attention,outputs,att_weight
+                            pred_AS,entropy_attention,outputs, _ = self.model(cine, tab_data) # Bx3xTxHxW
                             
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -264,6 +274,7 @@ class Network(object):
                         cines = torch.cat([cine[0], cine[1]], dim=0)
                         if self.config['use_cuda']:
                             cines = cines.cuda()
+                            tab_data = tab_data.cuda()
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         bsz = target_AS.shape[0]
@@ -294,13 +305,13 @@ class Network(object):
             loss_avg = torch.mean(torch.stack(losses)).item()
             #acc_AS, f1_B, val_loss = self.test(loader_va, mode="val")
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':
-                ## Validation Data Evaluration 
+                ## Validation Data Evaluation 
                 acc_AS, val_loss = self.test(loader_va, mode="val")
                 if self.config['use_wandb']:
                     wandb.log({"tr_loss":loss_avg, "val_loss":val_loss, "val_AS_acc":acc_AS})
                     # wandb.log({"tr_loss_AS":loss_avg_AS, "tr_loss_B":loss_avg_B, "tr_loss":loss_avg,
                     #            "val_loss":val_loss, "val_B_f1":f1_B, "val_AS_acc":acc_AS})
-                ## Test Data Evaluration    
+                ## Test Data Evaluation    
                 acc_AS_te, te_loss = self.test(loader_te, mode="val")
                 if self.config['use_wandb']:
                     wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})
@@ -370,6 +381,7 @@ class Network(object):
         losses = []
         for data in tqdm(loader_te):
             cine = data[0]
+            tab_data = data[1]
             target_AS = data[2]
             target_B = data[3]
             # Transfer data from CPU to GPU.
@@ -381,13 +393,14 @@ class Network(object):
                         cine = [c.cuda() for c in cine]
                     else:
                         cine = cine.cuda()
+                    tab_data = tab_data.cuda()
                     target_AS = target_AS.cuda()
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                    pred_AS, _, _, _ = self.model(cine, tab_data) # Bx3xTxHxW
                 else:
-                    pred_AS = self.model(cine) # Bx3xTxHxW
+                    pred_AS = self.model(cine, tab_data) # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                 losses += [loss]
 
@@ -396,6 +409,7 @@ class Network(object):
                 cines = torch.cat([cine[0], cine[1]], dim=0)
                 if self.config['use_cuda']:
                     cines = cines.cuda()
+                    tab_data = tab_data.cuda()
                     target_AS = target_AS.cuda()
                     target_B = target_B.cuda()
                 bsz = target_AS.shape[0]
@@ -449,13 +463,14 @@ class Network(object):
         predicted_qual = []
         embeddings = []
         
-        for cine, target_AS, target_B, data_info, cine_orig in tqdm(loader):
+        for cine, tab_info, target_AS, target_B, data_info, cine_orig in tqdm(loader):
             # collect the label info
             target_AS_arr.append(int(target_AS[0]))
             target_B_arr.append(int(target_B[0]))
             # Transfer data from CPU to GPU.
             if self.config['use_cuda']:
                 cine = cine.cuda()
+                tab_info = tab_info.cuda()
                 target_AS = target_AS.cuda()
                 target_B = target_B.cuda()
                 
@@ -474,7 +489,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, att_weight = self.model(cine, tab_info) # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine) # Bx3xTxHxW
             # collect the model prediction info

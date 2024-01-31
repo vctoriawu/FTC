@@ -16,7 +16,7 @@ from random import lognormvariate
 from random import seed
 import torch.nn as nn
 import random
-from dataloader.utils import load_as_data, preprocess_as_data
+from dataloader.utils import load_as_data, preprocess_as_data, fix_leakage
 
 seed(42)
 torch.random.manual_seed(42)
@@ -110,6 +110,7 @@ def get_as_dataloader(config, split, mode):
         fr = 16
     
     # read in the data directory CSV as a pandas dataframe
+    raw_dataset = pd.read_csv(img_path_dataset)
     dataset = pd.read_csv(img_path_dataset)
         
     # append dataset root to each path in the dataframe
@@ -150,6 +151,14 @@ def get_as_dataloader(config, split, mode):
         tab_dataset = train_set
     elif split != 'all':
         raise ValueError(f'View should be train/val/test/all, got {split}')
+    
+    #Fix data leakage 
+    if split == 'train':
+        dataset = fix_leakage(df=raw_dataset, df_subset=dataset, split=split)
+    elif split == 'val':
+        dataset = fix_leakage(df=raw_dataset, df_subset=dataset, split=split)
+    elif split == 'test':
+        dataset = fix_leakage(df=raw_dataset, df_subset=dataset, split=split)
         
     dset = AorticStenosisDataset(img_path_dataset=dataset, 
                                 tab_dataset=tab_dataset,
@@ -284,11 +293,11 @@ class AorticStenosisDataset(Dataset):
         #get associated tabular data based on echo ID
         study_num = data_info['Echo ID#']
         tab_info = self.tab_dataset.loc[int(study_num)]
-        tab_info = torch.tensor(tab_info.values)
-        #If study num for tabular dataset does not exist, print out exception...
-            #TODO
+        tab_info = torch.tensor(tab_info.values, dtype=torch.float32)
 
         cine_original = self.cine_loader(data_info['path'])
+
+        #if raw_dataset comes from all_cines in nas drive...
         folder = 'round2'
         if folder == 'all_cines':
             cine_original = cine_original.transpose((2,0,1))
@@ -298,7 +307,6 @@ class AorticStenosisDataset(Dataset):
         window_length = 60000 / (lognormvariate(self.hr_mean, self.hr_srd) * data_info['frame_time'])
         cine = self.get_random_interval(cine_original, window_length)
         #print(cine.shape)
-        #cine = resize(cine, (self.frames, *self.resolution))
         cine = resize(cine, (32, *self.resolution))
         cine = torch.tensor(cine).unsqueeze(0)
         

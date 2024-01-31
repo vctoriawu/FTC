@@ -190,17 +190,22 @@ def get_model(config):
             
         if config['model'] == "FTC_TAD":
             latent_dim=1024
+            tab_input_dim=1 
+            tab_emb_dims=[16, 32, 64] 
             ds_max_length = 128
             num_hidden_layers = 16      # Number of Transformers
             intermediate_size = 8192    # size of the main MLP inside of the Transformers
             rm_branch = None            # select branch to not train: None, 'SD', 'EF'
             use_conv = False            # use convolutions instead of MLP for the regressors - worse results
             attention_heads = 16    
-            model = get_model_tad(latent_dim, img_per_video=ds_max_length, 
+            model = get_model_tad(latent_dim, 
+                                tab_input_dim=tab_input_dim, 
+                                tab_emb_dims=tab_emb_dims, 
+                                img_per_video=ds_max_length, 
                                 num_hidden_layers=num_hidden_layers, 
                                 intermediate_size=intermediate_size, 
                                 rm_branch=rm_branch, use_conv=use_conv,
-                                attention_heads=attention_heads)
+                                attention_heads=attention_heads, use_tab=config['use_tab'])
             
         if config['model'] == "resae":
             

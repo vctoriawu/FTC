@@ -12,6 +12,83 @@ from sklearn.base import TransformerMixin
 from sklearn.utils.validation import check_array
 from typing import List, Dict, Union, Tuple
 
+
+def fix_leakage(df, df_subset, split='train'):
+    """Fix overlap in studies between the particular 'split' subset and the other subsets 
+    in the dataset.
+        
+        Args:
+        df: DataFrame of the complete dataset. 
+        df_subset: A view of a subset of the DataFrame; it is either the
+            train, validation or test set.
+        split: Whether the df_subset is associated with the train/val/test set
+
+        Returns:
+        A dataframe of df without any data leakage problem between the train, val, test 
+        subsets.
+    """
+    train = df[df['split']=='train']
+    val = df[df['split']=='val']
+    test = df[df['split']=='test']
+
+    #Check whether any study ID in one subset is in any other subset
+    val_test = val['Echo ID#'].isin(test['Echo ID#']).any()
+    train_test = train['Echo ID#'].isin(test['Echo ID#']).any()
+    train_val = train['Echo ID#'].isin(val['Echo ID#']).any()
+    print("Checking if there is data leakage...")
+    print(f"There is overlap between: val/test: {val_test}, train/test: {train_test}, train/val: {train_val}")
+
+    #Get indices for all rows in the subset that overlap with another subset
+    train_test_overlap = train['Echo ID#'].isin(test['Echo ID#'])
+    train_test_leak_idx = [i for i, x in enumerate(train_test_overlap) if x]
+
+    val_test_overlap = val['Echo ID#'].isin(test['Echo ID#'])
+    val_test_leak_idx = [i for i, x in enumerate(val_test_overlap) if x]
+    
+    #Get unique study IDs corresponding to the overlapping rows
+    train_test_leak_ids = train['Echo ID#'].iloc[train_test_leak_idx].to_list()
+    train_test_leak_ids = list(set(train_test_leak_ids))
+
+    val_test_leak_ids = val['Echo ID#'].iloc[val_test_leak_idx].to_list()
+    val_test_leak_ids = list(set(val_test_leak_ids))
+
+    print(f"Echo IDs of overlapping studies between: val/test: {val_test_leak_ids}, train/test: {train_test_leak_ids}")
+
+    #Assign overlapping studies to only one subset
+    num_remove_test = len(train_test_leak_ids)//2
+    remove_test_ids = train_test_leak_ids[0:num_remove_test]
+    remove_train_ids = train_test_leak_ids[num_remove_test:]  
+
+    num_remove_val = len(val_test_leak_ids)//2
+    remove_val_ids = val_test_leak_ids[0:num_remove_val]
+    remove_test_ids = remove_test_ids + val_test_leak_ids[num_remove_val:]  
+
+    if split == 'train':
+        fixed_subset = remove_ids(remove_ids=remove_train_ids, dataset=df_subset)
+        if len(fixed_subset) == len(df_subset) - 5:
+            print("Data leakage for train/test subsets has been fixed.")
+    elif split == 'val':
+        fixed_subset = remove_ids(remove_ids=remove_val_ids, dataset=df_subset)
+    elif split == 'test':  
+        fixed_subset = remove_ids(remove_ids=remove_test_ids, dataset=df_subset)
+        if len(fixed_subset) == len(df_subset) - 8:
+            print("Data leakage for train/test subsets has been fixed.")
+    
+    return fixed_subset
+
+def remove_ids(remove_ids, dataset):
+    "Remove rows with 'Echo ID#' in the list of remove_ids for the dataset"
+    for id in remove_ids:
+        remove_rows = dataset[dataset['Echo ID#']==id].index.values
+        dataset = dataset.drop(index=remove_rows)
+    
+    return dataset
+
+    
+    
+
+
+
 #utils from tabular transformer finetuning branch
 def preprocess_as_data(train, val, test, cat_cols):
 

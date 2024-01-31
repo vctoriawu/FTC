@@ -9,8 +9,6 @@ from utils import validation_constructive
 import wandb
 
 if __name__ == "__main__":
-    
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4,5"
     config = get_config()
     
     if config['use_wandb']:

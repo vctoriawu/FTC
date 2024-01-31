@@ -7,17 +7,18 @@ def get_config():
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024/FTC/logs"
     config['model_load_dir'] = None # required for test-only mode
-    config['best_model_path'] = '/workspace/miccai2024/FTC/logs/tad_1e-4/best_model.pth'
-
+    config['best_model_dir'] = "/workspace/miccai2024/FTC/logs/tad_1e-4_tclloss_batch16"
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
     config['label_scheme_name'] = 'all'
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
+    # number of AS classes
     config['num_classes'] = 4
 
     #Hyperaparameters for tabular dataset.
+    config['use_tab'] = True
     config['scale_feats'] = True
     config['num_ex'] = None
     config['drop_cols'] = []
@@ -41,8 +42,8 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 110
+    config['num_epochs'] = 5 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
-    config['sampler'] = 'random' # imbalanaced sampling based on AS/bicuspid/random
+    config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
  
     return config
