@@ -163,7 +163,7 @@ class FTC(nn.Module):
         #self.vf = frames_per_video
         self.em = embedding_dim
         
-    def forward(self, x, tab_x):   
+    def forward(self, x, tab_x, split):   
         # Video dimension (B x F x C x H x W)
         x = x.permute(0,2,1,3,4)
         
@@ -194,15 +194,18 @@ class FTC(nn.Module):
         outputs = self.transformer([embeddings_reshaped],[pos],[mask])
 
         #integrate tab data
-        if self.use_tab:
-            tab_x = torch.unsqueeze(tab_x, dim=-1) 
-            
-            # B x F x 1
-            #Tranform x feature values to higher dim using a shared mlp layer
-            tab_x = self.tab_embed(tab_x)
+        if split=='Train':
+            if self.use_tab:
+                tab_x = torch.unsqueeze(tab_x, dim=-1) 
+                
+                # B x F x 1
+                #Tranform x feature values to higher dim using a shared mlp layer
+                tab_x = self.tab_embed(tab_x)
 
-            #cross attention between video and tabular embeddings
-            outputs = self.cross_attention(outputs, tab_x)
+                #cross attention between video and tabular embeddings
+                outputs = self.cross_attention(outputs, tab_x)
+        else:
+            print("Cross-attention module has been skipped.")
 
         method = "attention"   # "average","emb_mag","attention",
         if method == "average":

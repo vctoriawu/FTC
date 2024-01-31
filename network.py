@@ -251,7 +251,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _ = self.model(cine, tab_data) # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, _ = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -266,7 +266,7 @@ class Network(object):
                             losses += [loss] 
                         
                         else:
-                            pred_AS = self.model(cine) # Bx3xTxHxW
+                            pred_AS = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                             losses += [loss]
                     # Contrastive Learning
@@ -278,7 +278,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         bsz = target_AS.shape[0]
-                        features = self.model(cines) # Bx3xTxHxW
+                        features = self.model(cines, tab_data, split='Train') # Bx3xTxHxW
                         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
                         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
                         if self.config['cotrastive_method'] == 'SupCon':
@@ -398,9 +398,9 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _ = self.model(cine, tab_data) # Bx3xTxHxW
+                    pred_AS, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
-                    pred_AS = self.model(cine, tab_data) # Bx3xTxHxW
+                    pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                 losses += [loss]
 
@@ -489,9 +489,9 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight = self.model(cine, tab_info) # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, att_weight = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
-                pred_AS = self.model(cine) # Bx3xTxHxW
+                pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info
             argm, max_p, ent, vac, uni = self._get_prediction_stats(pred_AS, self.num_classes_AS)
             pred_AS_arr.append(argm.cpu().numpy()[0])

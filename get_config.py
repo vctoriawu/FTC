@@ -3,7 +3,7 @@ def get_config():
     config = {}
     
     config['mode'] = "train"
-    config['use_wandb'] = False
+    config['use_wandb'] = True
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024/FTC/logs"
     config['model_load_dir'] = None # required for test-only mode
@@ -42,7 +42,7 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 5 #110
+    config['num_epochs'] = 1 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
  

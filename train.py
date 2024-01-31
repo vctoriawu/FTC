@@ -12,7 +12,7 @@ if __name__ == "__main__":
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="contrastive learning", entity="asproject",config = config, name = 'tad_1e-4_tclloss_batch16')
+        run = wandb.init(project="multimodal_as", entity="andreafung6",config = config, name = 'tad_1e-4_tclloss_batch16')
     
     model = get_model(config)
     net = Network(model, config)
