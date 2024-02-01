@@ -312,9 +312,9 @@ class Network(object):
                     # wandb.log({"tr_loss_AS":loss_avg_AS, "tr_loss_B":loss_avg_B, "tr_loss":loss_avg,
                     #            "val_loss":val_loss, "val_B_f1":f1_B, "val_AS_acc":acc_AS})
                 ## Test Data Evaluation    
-                acc_AS_te, te_loss = self.test(loader_te, mode="val")
+                '''acc_AS_te, te_loss = self.test(loader_te, mode="val")
                 if self.config['use_wandb']:
-                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})
+                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})'''
 
                 # Save model every epoch.
                 self._save(self.checkpts_file)

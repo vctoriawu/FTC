@@ -5,9 +5,9 @@ def get_config():
     config['mode'] = "train"
     config['use_wandb'] = True
     config['use_cuda'] = True
-    config['log_dir'] = "/workspace/miccai2024/FTC/logs"
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
     config['model_load_dir'] = None # required for test-only mode
-    config['best_model_dir'] = "/workspace/miccai2024/FTC/logs/tad_1e-4_tclloss_batch16"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/tad_1e-4_tclloss_batch16"
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
@@ -42,7 +42,7 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 1 #110
+    config['num_epochs'] = 15 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
  

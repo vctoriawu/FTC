@@ -191,7 +191,7 @@ def get_model(config):
         if config['model'] == "FTC_TAD":
             latent_dim=1024
             tab_input_dim=1 
-            tab_emb_dims=[16, 32, 64] 
+            tab_emb_dims=[16, 32, 72] 
             ds_max_length = 128
             num_hidden_layers = 16      # Number of Transformers
             intermediate_size = 8192    # size of the main MLP inside of the Transformers

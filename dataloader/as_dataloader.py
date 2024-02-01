@@ -22,8 +22,8 @@ seed(42)
 torch.random.manual_seed(42)
 np.random.seed(42)
 
-img_path_dataset = '/workspace/as_tom_annotations-all.csv'
-tab_path_dataset = '/workspace/finetuned_df.csv'
+img_path_dataset = '/mnt/nas-server/published/vaseli_ProtoASNet_MICCAI2023/data_removelater/as_tom/annotations-all.csv'
+tab_path_dataset = '/workspace/data/finetune/finetuned_df.csv'
 dataset_root = r"/mnt/nas-server/published/vaseli_ProtoASNet_MICCAI2023/data_removelater/as_tom"
 cine_loader = 'mat_loader'
 

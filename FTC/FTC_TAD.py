@@ -7,7 +7,7 @@ import torchvision
 #from ResNetAE.ResNetAE import ResNetAE
 from FTC.posembedding import build_position_encoding
 from FTC.deformable_transformer import DeformableTransformer
-from FTC.util.misc import NestedTensor
+from FTC.util.misc import NestedTensor, construct_ASTransformer
 from einops import rearrange
 
 class CrossAttention(nn.Module):
@@ -37,21 +37,25 @@ class CrossAttention(nn.Module):
         self.heads = heads
         self.scale = dim_head ** -0.5
 
+        self.tab_norm = nn.LayerNorm(context_dim)
+        self.vid_norm = nn.LayerNorm(dim)
+
         self.to_q = nn.Linear(dim, inner_dim, bias = False)
         self.to_k = nn.Linear(context_dim, inner_dim, bias = False)
         self.to_v = nn.Linear(context_dim, inner_dim, bias = False)
+        self.norm_q = nn.LayerNorm(inner_dim)
+        self.norm_k = nn.LayerNorm(inner_dim)
         self.to_out = nn.Linear(inner_dim, dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, tab_x):
-        
         #get shape of video input
         b, f, _ = x.shape
         h = self.heads
-        kv_input = tab_x
+        kv_input = self.tab_norm(tab_x)
         # q, k, v = self.to_q(x), self.to_k(kv_input), self.to_v(kv_input)
-        q = self.to_q(x)
-        k = self.to_k(kv_input)
+        q = self.norm_q(self.to_q(self.vid_norm(x)))
+        k = self.norm_k(self.to_k(kv_input))
         v = self.to_v(kv_input)
         q, k, v = map(lambda t: rearrange(tensor=t, pattern='b f (h d) -> b h f d', h=h), (q, k, v))
         q = q * self.scale
@@ -109,7 +113,8 @@ class FTC(nn.Module):
                 use_tab, 
                 cross_attention, 
                 tab_input_dim, 
-                tab_emb_dims, 
+                tab_emb_dims,
+                loaded_parameters, 
                 pretrained = False):
         super(FTC, self).__init__()
         
@@ -119,7 +124,6 @@ class FTC(nn.Module):
         self.tab_input_dim = tab_input_dim
         self.tab_emb_dims = tab_emb_dims
         
-        self.cross_attention = cross_attention
         self.AE = AE
         if self.pretrained == True:
             from pathlib import Path
@@ -133,15 +137,24 @@ class FTC(nn.Module):
 
         self.pos_embed = pos_embed
         self.transformer = transformer
-        self.tab_embed = nn.Sequential(
-            nn.Linear(in_features=self.tab_input_dim, out_features=self.tab_emb_dims[0]),
-            nn.ReLU(inplace=True),
-            nn.Linear(in_features=self.tab_emb_dims[0], out_features=tab_emb_dims[1]),
-            nn.ReLU(inplace=True),
-            nn.Linear(in_features=tab_emb_dims[1], out_features=tab_emb_dims[2]),
-            nn.ReLU(inplace=True)
-        )
-        
+
+        # Get the parameters for the tabular model
+        loaded_categories = loaded_parameters['categories']
+        loaded_num_continuous = loaded_parameters['num_continuous']
+        loaded_dim = loaded_parameters['dim']
+        loaded_depth = loaded_parameters['depth']
+        loaded_heads = loaded_parameters['heads']
+        loaded_dim_head = loaded_parameters['dim_head']
+        loaded_dim_out = loaded_parameters['dim_out']
+        loaded_num_special_tokens = loaded_parameters['num_special_tokens']
+        loaded_attn_dropout = loaded_parameters['attn_dropout']
+        loaded_ff_dropout = loaded_parameters['ff_dropout']
+        loaded_hidden_dim = loaded_parameters['hidden_dim']
+        loaded_numerical_features = loaded_parameters['numerical_features']
+        loaded_classification = loaded_parameters['classification']
+        loaded_emb_type = loaded_parameters['emb_type']
+        loaded_numerical_bins = loaded_parameters['numerical_bins']
+
         self.aorticstenosispred = nn.Sequential(
             nn.Linear(in_features=embedding_dim, out_features=embedding_dim//2, bias=True),
             nn.LayerNorm(embedding_dim//2),
@@ -162,6 +175,22 @@ class FTC(nn.Module):
 
         #self.vf = frames_per_video
         self.em = embedding_dim
+
+        # load the pretrained weights TODO: Make this a config
+        self.load_state_dict(torch.load("best_model.pth")["model"], strict=False)
+
+        self.cross_attention = cross_attention
+
+        self.tab_embed = construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
+                                                 loaded_dim, loaded_depth, loaded_heads, loaded_dim_head, loaded_dim_out,
+                                                 loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
+                                                 loaded_hidden_dim, loaded_classification,
+                                                 loaded_numerical_bins, loaded_emb_type)
+        self.tab_embed.load_state_dict(torch.load('../as_transformer.pth'))
+        
+        # Set requires_grad to False for all parameters
+        for param in self.tab_embed.parameters():
+            param.requires_grad = False
         
     def forward(self, x, tab_x, split):   
         # Video dimension (B x F x C x H x W)
@@ -200,7 +229,7 @@ class FTC(nn.Module):
                 
                 # B x F x 1
                 #Tranform x feature values to higher dim using a shared mlp layer
-                tab_x = self.tab_embed(tab_x)
+                _, tab_x = self.tab_embed(tab_x)
 
                 #cross attention between video and tabular embeddings
                 outputs = self.cross_attention(outputs, tab_x)
@@ -247,7 +276,6 @@ class FTC(nn.Module):
             
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
-        
 
         return as_prediction,entropy_attention,outputs,att_weight
 
@@ -266,6 +294,9 @@ def get_model_tad(emb_dim,
     model_res = torchvision.models.resnet18()
     dim_in = model_res.fc.in_features
     model_res.fc =  nn.Linear(dim_in, 1024)
+
+    # Parameters for tabular model
+    loaded_parameters = torch.load("../model_parameters.pth")
     
     # Setup model
     pos_embed = build_position_encoding(1024)
@@ -284,7 +315,7 @@ def get_model_tad(emb_dim,
     cross_attention = CrossAttention(dim=1024, 
         context_dim=tab_emb_dims[2], 
         heads = 12,
-        dim_head = 64,
+        dim_head = 72,
         dropout = 0.)
         
     model = FTC(AE=model_res,
@@ -294,7 +325,8 @@ def get_model_tad(emb_dim,
                 use_tab=use_tab, 
                 cross_attention=cross_attention, 
                 tab_input_dim=tab_input_dim, 
-                tab_emb_dims=tab_emb_dims, 
-                pretrained=False) 
+                tab_emb_dims=tab_emb_dims,
+                loaded_parameters=loaded_parameters, 
+                pretrained=False,) 
     
     return model

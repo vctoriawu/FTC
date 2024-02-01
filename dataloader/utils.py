@@ -179,7 +179,7 @@ def load_as_data(csv_path: str,
 
         data_df = pd.read_csv(csv_path, index_col=0)
         data_df = data_df.drop("AV stenosis", axis=1)
-        data_df = data_df.drop("age", axis=1)
+        #data_df = data_df.drop("age", axis=1)
 
         #If num_ex is None use all examples in dataset
         if not num_ex:

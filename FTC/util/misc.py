@@ -27,6 +27,8 @@ import logging
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
 
+from tab_transformer_pytorch.ft_transformer import FTTransformer
+
 
 def mkdir_if_not_exist(dirname):
     if not os.path.exists(dirname):
@@ -500,3 +502,39 @@ def inverse_sigmoid(x, eps=1e-5):
     x1 = x.clamp(min=eps)
     x2 = (1 - x).clamp(min=eps)
     return torch.log(x1/x2)
+
+def construct_ASTransformer(
+        categories,
+        num_continuous,
+        numerical_features,
+        dim,
+        depth,
+        heads,
+        dim_head = 16,
+        dim_out = 1,
+        num_special_tokens = 2,
+        attn_dropout = 0.,
+        ff_dropout = 0.,
+        hidden_dim = 128,
+        classification: bool = True,
+        numerical_bins=10,
+        emb_type="linear"
+):
+
+    return FTTransformer(
+        categories=categories,
+        num_continuous=num_continuous,
+        dim=dim,
+        depth=depth,
+        heads=heads,
+        dim_head=dim_head,
+        dim_out=dim_out,
+        num_special_tokens=num_special_tokens,
+        attn_dropout=attn_dropout,
+        ff_dropout=ff_dropout,
+        hidden_dim=hidden_dim,
+        numerical_features=numerical_features,
+        classification=classification,
+        numerical_bins=numerical_bins,
+        emb_type=emb_type
+    )
