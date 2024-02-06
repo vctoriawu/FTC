@@ -36,13 +36,14 @@ def get_config():
 
     # Hyperparameters for models.
     config['model'] = "FTC_TAD" # r2plus1d_18/x3d/resnet50/slowfast/tvn/FTC
+    config['latent_dim'] = 1024 # used only when model is FTC_TAD
     config['pretrained'] = False
     config['restore'] = True
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 15 #110
+    config['num_epochs'] = 50 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
  

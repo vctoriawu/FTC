@@ -218,7 +218,7 @@ class Network(object):
         uni = utils.test_unimodality(prob.cpu().numpy())
         return argm, max_percentage, entropy, vacuity, uni
         
-    def train(self, loader_tr, loader_va,loader_te):
+    def train(self, loader_tr, loader_va, loader_te):
         """Training pipeline."""
         # Switch model into train mode.
         self.model.train()
@@ -251,7 +251,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _ = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
+                            pred_AS, entropy_attention, outputs, vid_outputs, _ = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -261,9 +261,17 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
+                            # Calculating loss to align video and cross-attention output embeddings
+                            cos = torch.nn.CosineSimilarity(dim=-1)
+                            align_loss = cos(vid_outputs, outputs)
+
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                             loss = loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss = loss + 0.5*(torch.mean(align_loss))
                             losses += [loss] 
+
+                             
+                            
                         
                         else:
                             pred_AS = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
@@ -398,7 +406,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
@@ -489,7 +497,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, vid_outputs, att_weight = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info

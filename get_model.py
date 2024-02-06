@@ -189,7 +189,7 @@ def get_model(config):
             
             
         if config['model'] == "FTC_TAD":
-            latent_dim=1024
+            latent_dim=config['latent_dim']
             tab_input_dim=1 
             tab_emb_dims=[16, 32, 72] 
             ds_max_length = 128

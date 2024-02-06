@@ -8,6 +8,7 @@ import torchvision
 from FTC.posembedding import build_position_encoding
 from FTC.deformable_transformer import DeformableTransformer
 from FTC.util.misc import NestedTensor, construct_ASTransformer
+from FTC.cross_attention import CrossAttentionBlock
 from einops import rearrange
 
 class CrossAttention(nn.Module):
@@ -26,7 +27,7 @@ class CrossAttention(nn.Module):
     def __init__(
         self,
         dim=1024, #dimension of img input
-        context_dim=1024, #dimension of tab input
+        context_dim=72, #dimension of tab input
         heads = 12,
         dim_head = 64,
         dropout = 0.
@@ -219,8 +220,10 @@ class FTC(nn.Module):
         samples = NestedTensor(embeddings_reshaped, mask)
         pos = self.pos_embed(samples).cuda()
         
+        #TODO - cross attention here as well?
+
         #  B x F x Emb
-        outputs = self.transformer([embeddings_reshaped],[pos],[mask])
+        vid_outputs = self.transformer([embeddings_reshaped],[pos],[mask])
 
         #integrate tab data
         if split=='Train':
@@ -228,11 +231,11 @@ class FTC(nn.Module):
                 tab_x = torch.unsqueeze(tab_x, dim=-1) 
                 
                 # B x F x 1
-                #Tranform x feature values to higher dim using a shared mlp layer
+                #Tranform x feature values to new embedding using finetuned FT-transformer encoder
                 _, tab_x = self.tab_embed(tab_x)
 
                 #cross attention between video and tabular embeddings
-                outputs = self.cross_attention(outputs, tab_x)
+                outputs = self.cross_attention(vid_outputs, tab_x)
         else:
             print("Cross-attention module has been skipped.")
 
@@ -277,7 +280,7 @@ class FTC(nn.Module):
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
 
-        return as_prediction,entropy_attention,outputs,att_weight
+        return as_prediction, entropy_attention, outputs, vid_outputs, att_weight
 
 def get_model_tad(emb_dim, 
               tab_input_dim, 
@@ -312,11 +315,17 @@ def get_model_tad(emb_dim,
             dec_n_points=4,
             enc_n_points=4)
     
-    cross_attention = CrossAttention(dim=1024, 
-        context_dim=tab_emb_dims[2], 
-        heads = 12,
-        dim_head = 72,
-        dropout = 0.)
+    # cross_attention = CrossAttention(dim=1024, 
+    #     context_dim=tab_emb_dims[2], 
+    #     heads = 12,
+    #     dim_head = 72,
+    #     dropout = 0.)
+    cross_attention = CrossAttentionBlock(dim=1024, 
+                                        context_dim=tab_emb_dims[2], 
+                                        heads = 12, 
+                                        dim_head = 72, 
+                                        att_dropout = 0., 
+                                        dropout = 0.)
         
     model = FTC(AE=model_res,
                 pos_embed=pos_embed,
