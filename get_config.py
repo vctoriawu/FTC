@@ -43,7 +43,7 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 50 #110
+    config['num_epochs'] = 1 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
  

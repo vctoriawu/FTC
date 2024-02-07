@@ -178,7 +178,10 @@ class FTC(nn.Module):
         self.em = embedding_dim
 
         # load the pretrained weights TODO: Make this a config
-        self.load_state_dict(torch.load("best_model.pth")["model"], strict=False)
+        best_model=False
+        
+        if best_model:
+            self.load_state_dict(torch.load("best_model.pth")["model"], strict=False)
 
         self.cross_attention = cross_attention
 
@@ -187,7 +190,7 @@ class FTC(nn.Module):
                                                  loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
                                                  loaded_hidden_dim, loaded_classification,
                                                  loaded_numerical_bins, loaded_emb_type)
-        self.tab_embed.load_state_dict(torch.load('../as_transformer.pth'))
+        self.tab_embed.load_state_dict(torch.load('/workspace/as_transformer.pth'))
         
         # Set requires_grad to False for all parameters
         for param in self.tab_embed.parameters():
@@ -299,7 +302,7 @@ def get_model_tad(emb_dim,
     model_res.fc =  nn.Linear(dim_in, 1024)
 
     # Parameters for tabular model
-    loaded_parameters = torch.load("../model_parameters.pth")
+    loaded_parameters = torch.load("/workspace/model_parameters.pth")
     
     # Setup model
     pos_embed = build_position_encoding(1024)
