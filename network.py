@@ -79,8 +79,21 @@ class Network(object):
         else:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
-                                                                    T_max=config['num_epochs'])
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer,
+                mode='min',  # or 'max' depending on whether you want to decrease LR when a quantity has stopped decreasing or increasing
+                factor=0.5,   # Factor by which the learning rate will be reduced. new_lr = lr * factor
+                patience=5,   # Number of epochs with no improvement after which LR will be reduced
+                verbose=True,  # If True, prints a message to stdout for each update
+                threshold=1e-4,  # Threshold for measuring the new optimum, to only focus on significant changes
+                cooldown=2,   # Number of epochs to wait before resuming normal operation after LR has been reduced
+                min_lr=1e-6   # A lower bound on the learning rate
+            )
+        
+        '''CosineAnnealingLR(self.optimizer,
+                                                                    T_max=config['num_epochs'],
+                                                                    eta_min = 0.000001)'''
+        
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
         self.temperature = config['temp']
@@ -92,6 +105,11 @@ class Network(object):
 
         # init auxiliary stuff such as log_func
         self._init_aux()
+
+        # loss for the embedding space
+        # self.embed_loss = torch.nn.CosineSimilarity() #torch.nn.MSELoss()
+
+        # self._restore('../checkpoint.pth')
 
     def _init_aux(self):
         """Intialize aux functions, features."""
@@ -216,7 +234,7 @@ class Network(object):
         max_percentage, argm = torch.max(prob, dim=1)
         entropy = torch.sum(-prob*torch.log(prob), dim=1)
         uni = utils.test_unimodality(prob.cpu().numpy())
-        return argm, max_percentage, entropy, vacuity, uni
+        return argm, max_percentage, entropy, vacuity, uni, prob
         
     def train(self, loader_tr, loader_va,loader_te):
         """Training pipeline."""
@@ -230,7 +248,7 @@ class Network(object):
             #losses_AS = []
             #losses_B = []
             losses = []
-            print('Epoch: ' + str(epoch) + ' LR: ' + str(self.scheduler.get_lr()))
+            print('Epoch: ' + str(epoch) + ' LR: ' + str(self.optimizer.param_groups[0]["lr"])) #get_lr()))
             
             with tqdm(total=len(loader_tr)) as pbar:
                 for data in loader_tr:
@@ -251,8 +269,12 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _ = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, _, ca_preds = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
+                            # Calculate loss between learned joint embeddings
+                            # ca_emb_loss = self.embed_loss(learned_emb, ca_embed)
+                            # ca_emb_loss = torch.mean(1 - ca_emb_loss)
+
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
                             self.pos_e = self.pos.repeat(len(pred_AS),1,1)
@@ -261,8 +283,10 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
+                            ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
+                             
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-                            loss = loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss =  0.5*ca_loss + 0.5*loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 
                         
                         else:
@@ -312,9 +336,9 @@ class Network(object):
                     # wandb.log({"tr_loss_AS":loss_avg_AS, "tr_loss_B":loss_avg_B, "tr_loss":loss_avg,
                     #            "val_loss":val_loss, "val_B_f1":f1_B, "val_AS_acc":acc_AS})
                 ## Test Data Evaluation    
-                '''acc_AS_te, te_loss = self.test(loader_te, mode="val")
+                acc_AS_te, te_loss = self.test(loader_te, mode="val")
                 if self.config['use_wandb']:
-                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})'''
+                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})
 
                 # Save model every epoch.
                 self._save(self.checkpts_file)
@@ -365,7 +389,7 @@ class Network(object):
                
             
             # modify the learning rate
-            self.scheduler.step()   
+            self.scheduler.step(val_loss)   
 
     @torch.no_grad()
     def test(self, loader_te, mode="test"):
@@ -398,7 +422,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
@@ -456,8 +480,8 @@ class Network(object):
             self._restore(self.bestmodel_file)
         # Switch the model into eval mode.
         self.model.eval()
-        fn, patient, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[]
-        target_AS_arr, target_B_arr, pred_AS_arr, pred_B_arr = [], [], [], []
+        fn, patient, echo, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[], []
+        target_AS_arr, target_B_arr, pred_AS_arr, pred_logits_arr = [], [], [], []
         max_AS_arr, entropy_AS_arr, vacuity_AS_arr, uni_AS_arr = [], [], [], []
         #max_B_arr, entropy_B_arr, vacuity_B_arr = [], [], []
         predicted_qual = []
@@ -477,6 +501,7 @@ class Network(object):
             # collect metadata from data_info
             fn.append(data_info['path'][0])
             patient.append(int(data_info['patient_id'][0]))
+            echo.append(int(data_info['Echo ID#'][0]))
             view.append(data_info['view'][0])
             age.append(int(data_info['age'][0]))
             #lv.append(float(data_info['LVMass indexed'][0]))
@@ -493,7 +518,7 @@ class Network(object):
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info
-            argm, max_p, ent, vac, uni = self._get_prediction_stats(pred_AS, self.num_classes_AS)
+            argm, max_p, ent, vac, uni, logits = self._get_prediction_stats(pred_AS, self.num_classes_AS)
             pred_AS_arr.append(argm.cpu().numpy()[0])
             max_AS_arr.append(max_p.cpu().numpy()[0])
             entropy_AS_arr.append(ent.cpu().numpy()[0])
@@ -502,13 +527,14 @@ class Network(object):
             else:
                 vacuity_AS_arr.append(vac)
             uni_AS_arr.append(uni[0])
+            pred_logits_arr.append(logits.cpu().numpy()[0])
             
             if record_embeddings:
                 embeddings += [embedding[0].squeeze().numpy()]
 
                 
         # compile the information into a dictionary
-        d = {'path':fn, 'id':patient, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
+        d = {'path':fn, 'id':patient, 'echo_id': echo, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
              'GT_AS':target_AS_arr, 'pred_AS':pred_AS_arr, 'max_AS':max_AS_arr,
              'ent_AS':entropy_AS_arr, 'vac_AS':vacuity_AS_arr, 'uni_AS':uni_AS_arr,
              # 'GT_B':target_B_arr, 'pred_B':pred_B_arr, 'max_B':max_B_arr,

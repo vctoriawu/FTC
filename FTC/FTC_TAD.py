@@ -73,6 +73,50 @@ class CrossAttention(nn.Module):
         
         return self.to_out(out)
 
+class EmbeddingMappingFunction(nn.Module):
+    def __init__(self, video_dim, hidden_dim, tabular_dim, num_heads=8, num_transformer_layers=2):
+        super(EmbeddingMappingFunction, self).__init__()
+        '''self.fc1 = nn.Linear(video_dim, hidden_dim)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, tabular_dim)
+        self.layernorm = nn.LayerNorm(hidden_dim)'''
+
+        # Self-attention layers
+        self.transformer_layer = nn.TransformerEncoderLayer(
+            d_model=video_dim, 
+            nhead=num_heads, 
+            dim_feedforward=hidden_dim,
+            dropout=0.1
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            self.transformer_layer, 
+            num_layers=num_transformer_layers
+        )
+
+        # Feed-forward layer
+        self.fc = nn.Linear(video_dim, tabular_dim)
+        self.layernorm = nn.LayerNorm(video_dim)
+
+    def forward(self, x):
+        '''residual = x  # Preserve the input as the residual
+
+        x = self.fc1(x)
+        x = self.layernorm(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+
+        # Add the residual connection
+        x += residual'''
+
+        # Apply self-attention using Transformer
+        x = self.transformer_encoder(x)
+
+        # Feed-forward layer
+        x = self.fc(x)
+        # x = self.layernorm(x)
+
+        return x
+    
 class Reduce(nn.Module):
     def __init__(self):
         super().__init__()
@@ -177,7 +221,7 @@ class FTC(nn.Module):
         self.em = embedding_dim
 
         # load the pretrained weights TODO: Make this a config
-        self.load_state_dict(torch.load("best_model.pth")["model"], strict=False)
+        # self.load_state_dict(torch.load("best_model.pth")["model"], strict=False)
 
         self.cross_attention = cross_attention
 
@@ -191,7 +235,10 @@ class FTC(nn.Module):
         # Set requires_grad to False for all parameters
         for param in self.tab_embed.parameters():
             param.requires_grad = False
-        
+
+        # Map video embeddings to video+tab embeddings
+        # self.map_embed = EmbeddingMappingFunction(embedding_dim, embedding_dim, embedding_dim)
+
     def forward(self, x, tab_x, split):   
         # Video dimension (B x F x C x H x W)
         x = x.permute(0,2,1,3,4)
@@ -232,9 +279,15 @@ class FTC(nn.Module):
                 _, tab_x = self.tab_embed(tab_x)
 
                 #cross attention between video and tabular embeddings
-                outputs = self.cross_attention(outputs, tab_x)
+                ca_outputs = self.cross_attention(outputs, tab_x)
+
+                # we want to get ca_outputs from outputs using our embedding mapping function
+                # learned_joint_emb = self.map_embed(outputs)
         else:
             print("Cross-attention module has been skipped.")
+            #outputs = self.map_embed(outputs)
+            #learned_joint_emb = outputs
+            #ca_outputs = outputs
 
         method = "attention"   # "average","emb_mag","attention",
         if method == "average":
@@ -253,14 +306,22 @@ class FTC(nn.Module):
             
         elif method == "attention":
             # B x F x Emb => B x T x 4
-            as_prediction = self.aorticstenosispred(outputs)
+            as_prediction = self.aorticstenosispred(outputs) #learned_joint_emb)
+
+            # cross attention preds
+            if split=='Train':
+                if self.use_tab:
+                    as_ca_predictions = self.aorticstenosispred(ca_outputs)
+            else:
+                as_ca_predictions = as_prediction
             
             # attention weights B x F x 1
-            att_weight = self.attentionweights(outputs)
+            att_weight = self.attentionweights(outputs) #learned_joint_emb)
             #print(att_weight.shape,outputs.shape)
             att_weight = nn.functional.softmax(att_weight, dim=1)
             # B x T x 4   =>  B x 4
             as_prediction = (as_prediction * att_weight).sum(1)
+            as_ca_predictions = (as_ca_predictions * att_weight).sum(1)
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
             
@@ -277,7 +338,7 @@ class FTC(nn.Module):
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
 
-        return as_prediction,entropy_attention,outputs,att_weight
+        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions#, learned_joint_emb, ca_outputs
 
 def get_model_tad(emb_dim, 
               tab_input_dim, 
