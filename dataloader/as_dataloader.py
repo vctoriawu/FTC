@@ -51,7 +51,8 @@ label_schemes: Dict[str, Dict[str, Union[int, float]]] = {
     'not_severe': {'normal': 0, 'mild': 0, 'moderate': 0, 'severe': 1},
     'as_only': {'mild': 0, 'moderate': 1, 'severe': 2},
     'mild_moderate': {'mild': 0, 'moderate': 1},
-    'moderate_severe': {'moderate': 0, 'severe': 1}
+    'moderate_severe': {'moderate': 0, 'severe': 1},
+    'tufts': {'normal': 0, 'mild': 1, 'moderate': 2, 'severe': 2}
 }
 class_labels: Dict[str, List[str]] = {
     'binary': ['Normal', 'AS'],
@@ -59,7 +60,8 @@ class_labels: Dict[str, List[str]] = {
     'not_severe': ['Not Severe', 'Severe'],
     'as_only': ['mild', 'moderate', 'severe'],
     'mild_moderate': ['mild', 'moderate'],
-    'moderate_severe': ['moderate', 'severe']
+    'moderate_severe': ['moderate', 'severe'],
+    'tufts': ['Normal', 'Early', 'Significant']
 }
 
     
@@ -174,14 +176,14 @@ def get_as_dataloader(config, split, mode):
     if mode=='train':
         if config['sampler'] == 'AS':
             sampler_AS, _ = dset.class_samplers()
-            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_AS)
+            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_AS, num_workers=8)
         elif config['sampler'] == 'bicuspid':
             _ , sampler_B = dset.class_samplers()
-            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B)
+            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B, num_workers=8)
         else: # random sampling
-            loader = DataLoader(dset, batch_size=bsize, shuffle=True)
+            loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=8)
     else:
-        loader = DataLoader(dset, batch_size=bsize, shuffle=True)
+        loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=8)
     return loader
     
 

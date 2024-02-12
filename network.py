@@ -79,20 +79,9 @@ class Network(object):
         else:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer,
-                mode='min',  # or 'max' depending on whether you want to decrease LR when a quantity has stopped decreasing or increasing
-                factor=0.5,   # Factor by which the learning rate will be reduced. new_lr = lr * factor
-                patience=5,   # Number of epochs with no improvement after which LR will be reduced
-                verbose=True,  # If True, prints a message to stdout for each update
-                threshold=1e-4,  # Threshold for measuring the new optimum, to only focus on significant changes
-                cooldown=2,   # Number of epochs to wait before resuming normal operation after LR has been reduced
-                min_lr=1e-6   # A lower bound on the learning rate
-            )
-        
-        '''CosineAnnealingLR(self.optimizer,
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
                                                                     T_max=config['num_epochs'],
-                                                                    eta_min = 0.000001)'''
+                                                                    eta_min = 0.000001)
         
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
@@ -107,7 +96,7 @@ class Network(object):
         self._init_aux()
 
         # loss for the embedding space
-        # self.embed_loss = torch.nn.CosineSimilarity() #torch.nn.MSELoss()
+        self.embed_loss = torch.nn.CosineSimilarity() #torch.nn.MSELoss()
 
         # self._restore('../checkpoint.pth')
 
@@ -181,9 +170,9 @@ class Network(object):
         # Read checkpoint file.
         load_res = torch.load(pt_file)
         # Loading model.
-        self.model.load_state_dict(load_res["model"])
+        self.model.load_state_dict(load_res["model"], strict=False)
         # Loading optimizer.
-        self.optimizer.load_state_dict(load_res["optimizer"])
+        #self.optimizer.load_state_dict(load_res["optimizer"])
         
         
     
@@ -269,11 +258,11 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _, ca_preds = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, _, ca_preds, learned_emb, ca_embed = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
-                            # ca_emb_loss = self.embed_loss(learned_emb, ca_embed)
-                            # ca_emb_loss = torch.mean(1 - ca_emb_loss)
+                            ca_emb_loss = self.embed_loss(learned_emb, ca_embed)
+                            ca_emb_loss = torch.mean(1 - ca_emb_loss)
 
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -286,7 +275,7 @@ class Network(object):
                             ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
                              
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-                            loss =  0.5*ca_loss + 0.5*loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss =  ca_emb_loss + 0.5*ca_loss + 0.5*loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 
                         
                         else:
@@ -422,7 +411,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS, _, _, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
@@ -452,13 +441,13 @@ class Network(object):
             #argmax_pred_AS = torch.argmax(pred_AS, dim=1)
             #argmax_pred_B = torch.argmax(pred_B, dim=1)
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':
-                argm_AS, _, _, _, _ = self._get_prediction_stats(pred_AS, self.num_classes_AS)
+                argm_AS, _, _, _, _, _ = self._get_prediction_stats(pred_AS, self.num_classes_AS)
                 #argm_B, _, _, _, _ = self._get_prediction_stats(pred_B, 2)
                 conf_AS = utils.update_confusion_matrix(conf_AS, target_AS.cpu(), argm_AS.cpu())
                 #conf_B = utils.update_confusion_matrix(conf_B, target_B.cpu(), argm_B.cpu())
         if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':    
             loss_avg = torch.mean(torch.stack(losses)).item()
-            acc_AS = utils.acc_from_confusion_matrix(conf_AS)
+            acc_AS = utils.balanced_acc_from_confusion_matrix(conf_AS)
             print(conf_AS)
             #f1_B = utils.f1_from_confusion_matrix(conf_B)
 
@@ -537,6 +526,7 @@ class Network(object):
         d = {'path':fn, 'id':patient, 'echo_id': echo, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
              'GT_AS':target_AS_arr, 'pred_AS':pred_AS_arr, 'max_AS':max_AS_arr,
              'ent_AS':entropy_AS_arr, 'vac_AS':vacuity_AS_arr, 'uni_AS':uni_AS_arr,
+             'pred_logits_AS': pred_logits_arr
              # 'GT_B':target_B_arr, 'pred_B':pred_B_arr, 'max_B':max_B_arr,
              # 'ent_B':entropy_B_arr, 'vac_B':vacuity_B_arr, 
              }

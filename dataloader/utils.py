@@ -302,6 +302,11 @@ def acc_from_confusion_matrix(mat):
     # get accuracy from NxN confusion matrix
     return np.trace(mat)/np.sum(mat)
 
+def balanced_acc_from_confusion_matrix(mat):
+    # get balanced accuracy from NxN confusion matrix
+    recalls = np.diag(mat) / np.sum(mat, axis=1)
+    return np.mean(recalls)
+
 def f1_from_confusion_matrix(mat):
     # get f1-score from a 2x2 confusion matrix, assuming the "1" class is positive
     tp = mat[1,1]
