@@ -78,7 +78,9 @@ class EmbeddingMappingFunction(nn.Module):
         super(EmbeddingMappingFunction, self).__init__()
         self.fc1 = nn.Linear(video_dim, hidden_dim)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_dim, tabular_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, tabular_dim)
+        
         self.layernorm = nn.LayerNorm(hidden_dim)
 
         # Self-attention layers
@@ -104,6 +106,9 @@ class EmbeddingMappingFunction(nn.Module):
         x = self.layernorm(x)
         x = self.relu(x)
         x = self.fc2(x)
+        x = self.layernorm(x)
+        x = self.relu(x)
+        x = self.fc3(x)
 
         # Add the residual connection
         x += residual
@@ -306,7 +311,7 @@ class FTC(nn.Module):
             
         elif method == "attention":
             # B x F x Emb => B x T x 4
-            as_prediction = self.aorticstenosispred(outputs) #learned_joint_emb)
+            as_prediction = self.aorticstenosispred(learned_joint_emb)
 
             # cross attention preds
             if split=='Train':
@@ -316,7 +321,7 @@ class FTC(nn.Module):
                 as_ca_predictions = as_prediction
             
             # attention weights B x F x 1
-            att_weight = self.attentionweights(outputs) #learned_joint_emb)
+            att_weight = self.attentionweights(ca_outputs)
             #print(att_weight.shape,outputs.shape)
             att_weight = nn.functional.softmax(att_weight, dim=1)
             # B x T x 4   =>  B x 4

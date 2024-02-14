@@ -12,7 +12,7 @@ if __name__ == "__main__":
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '3_class_b_acc_ours')
+        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4_class_attn')
     
     model = get_model(config)
     net = Network(model, config)

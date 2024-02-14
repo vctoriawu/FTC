@@ -2,12 +2,12 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
-    config['mode'] = "test"
-    config['use_wandb'] = False
+    config['mode'] = "train"
+    config['use_wandb'] = True
     config['use_cuda'] = True
-    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_baseline"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_baseline" # required for test-only mode
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_baseline"
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
+    config['model_load_dir'] = None # required for test-only mode
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_attn"
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
@@ -19,7 +19,7 @@ def get_config():
 
 
     #Hyperaparameters for tabular dataset.
-    config['use_tab'] = False
+    config['use_tab'] = True
     config['scale_feats'] = True
     config['num_ex'] = None
     config['drop_cols'] = []
@@ -45,6 +45,6 @@ def get_config():
     config['batch_size'] = 16
     config['num_epochs'] = 100 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
-    config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
+    config['sampler'] = 'AS' # imbalanced sampling based on AS/bicuspid/random
  
     return config

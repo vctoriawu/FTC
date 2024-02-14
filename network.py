@@ -96,7 +96,8 @@ class Network(object):
         self._init_aux()
 
         # loss for the embedding space
-        self.embed_loss = torch.nn.CosineSimilarity() #torch.nn.MSELoss()
+        self.embed_loss_cos = torch.nn.CosineSimilarity() 
+        self.embed_loss_mse = torch.nn.MSELoss()
 
         # self._restore('../checkpoint.pth')
 
@@ -232,6 +233,8 @@ class Network(object):
         best_va_acc = 0.0 # Record the best validation metrics.
         best_va_acc_supcon = 0.0
         best_cont_loss = 1000
+
+        gradient_accumulation_steps = 9
             
         for epoch in range(self.config['num_epochs']):
             #losses_AS = []
@@ -240,7 +243,7 @@ class Network(object):
             print('Epoch: ' + str(epoch) + ' LR: ' + str(self.optimizer.param_groups[0]["lr"])) #get_lr()))
             
             with tqdm(total=len(loader_tr)) as pbar:
-                for data in loader_tr:
+                for index, data in enumerate(loader_tr):
                     cine = data[0]
                     tab_data = data[1]
                     target_AS = data[2]
@@ -261,8 +264,8 @@ class Network(object):
                             pred_AS,entropy_attention,outputs, _, ca_preds, learned_emb, ca_embed = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
-                            ca_emb_loss = self.embed_loss(learned_emb, ca_embed)
-                            ca_emb_loss = torch.mean(1 - ca_emb_loss)
+                            ca_emb_loss = self.embed_loss_cos(learned_emb, ca_embed)
+                            ca_emb_loss = torch.mean(1 - ca_emb_loss) + self.embed_loss_mse(learned_emb, ca_embed)
 
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -305,8 +308,11 @@ class Network(object):
                         losses += [loss]
                         
                     # Calculate the gradient.
+                    # grad_loss = loss / gradient_accumulation_steps
                     loss.backward()
+
                     # Update the parameters according to the gradient.
+                    #if (index + 1) % gradient_accumulation_steps == 0:
                     self.optimizer.step()
                     # Zero the parameter gradients in the optimizer
                     self.optimizer.zero_grad() 
