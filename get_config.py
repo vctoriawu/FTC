@@ -2,19 +2,19 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
-    config['mode'] = "test"
-    config['use_wandb'] = False
+    config['mode'] = "train"
+    config['use_wandb'] = True
     config['use_cuda'] = True
-    config['log_dir'] = "/AS_Neda/FTC/logs"
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_3_class"
     config['model_load_dir'] = None # required for test-only mode
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
-    config['label_scheme_name'] = 'all'
+    config['label_scheme_name'] = 'tufts'
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
-    config['num_classes'] = 4
+    config['num_classes'] = 3
     
     # Hyperparameters for bicuspid valve branch
     # config['bicuspid_weight'] = 1.0 # default is 1.0
@@ -32,7 +32,7 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 110
+    config['num_epochs'] = 100
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'random' # imbalanaced sampling based on AS/bicuspid/random
  

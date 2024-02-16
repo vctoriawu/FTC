@@ -10,11 +10,11 @@ import wandb
 
 if __name__ == "__main__":
     
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4,5"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="contrastive learning", entity="asproject",config = config, name = 'tad_1e-4_tclloss_batch16')
+        run = wandb.init(project="as_tab", entity="rcl_stroke",config = config, name = 'ftc_3_class')
     
     model = get_model(config)
     net = Network(model, config)

@@ -15,7 +15,7 @@ from visualization.vis import plot_tsne_visualization
 import dataloader.utils as utils
 from utils import validation_constructive
 from pathlib import Path
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score
 
 
 
@@ -119,8 +119,8 @@ class Network(object):
         self.checkpts_file = os.path.join(self.log_dir, "checkpoint.pth")
 
         # We save model that achieves the best performance: early stopping strategy.
-        #self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
-        self.bestmodel_file = Path('/AS_Neda/FTC/logs/tad_1e-4_tclloss_batch16/best_model.pth')
+        self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
+        #self.bestmodel_file = Path('/workspace/miccai2024_savedmodels/FTC/logs/ftc_baseline_3/best_model.pth')
         self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
         
         # For test, we also save the results dataframe
@@ -200,7 +200,7 @@ class Network(object):
         max_percentage, argm = torch.max(prob, dim=1)
         entropy = torch.sum(-prob*torch.log(prob), dim=1)
         uni = utils.test_unimodality(prob.cpu().numpy())
-        return argm, max_percentage, entropy, vacuity, uni
+        return argm, max_percentage, entropy, vacuity, uni, prob
         
     # def get_lr(self):
     #     return self.scheduler.get_lr()
@@ -237,7 +237,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, _ = self.model(cine) # Bx3xTxHxW
                             
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -364,6 +364,8 @@ class Network(object):
         conf_AS = np.zeros((self.num_classes_AS, self.num_classes_AS))
         #conf_B = np.zeros((2,2))
         losses = []
+        preds = []
+        gt = []
         for data in tqdm(loader_te):
             cine = data[0]
             target_AS = data[1]
@@ -381,7 +383,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                    pred_AS,entropy_attention,outputs, _ = self.model(cine) # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine) # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
@@ -410,13 +412,17 @@ class Network(object):
             #argmax_pred_AS = torch.argmax(pred_AS, dim=1)
             #argmax_pred_B = torch.argmax(pred_B, dim=1)
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':
-                argm_AS, _, _, _, _ = self._get_prediction_stats(pred_AS, self.num_classes_AS)
+                argm_AS, _, _, _, _, _ = self._get_prediction_stats(pred_AS, self.num_classes_AS)
                 #argm_B, _, _, _, _ = self._get_prediction_stats(pred_B, 2)
                 conf_AS = utils.update_confusion_matrix(conf_AS, target_AS.cpu(), argm_AS.cpu())
                 #conf_B = utils.update_confusion_matrix(conf_B, target_B.cpu(), argm_B.cpu())
+            preds.append(argm_AS.cpu().numpy())
+            gt.append(target_AS.cpu().numpy())
         if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':    
             loss_avg = torch.mean(torch.stack(losses)).item()
-            acc_AS = utils.acc_from_confusion_matrix(conf_AS)
+            preds = [element for sublist in preds for element in sublist]
+            gt = [element for sublist in gt for element in sublist]
+            acc_AS = balanced_accuracy_score(gt, preds) #utils.acc_from_confusion_matrix(conf_AS)
             print(conf_AS)
             #f1_B = utils.f1_from_confusion_matrix(conf_B)
 
@@ -438,8 +444,8 @@ class Network(object):
             self._restore(self.bestmodel_file)
         # Switch the model into eval mode.
         self.model.eval()
-        fn, patient, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[]
-        target_AS_arr, target_B_arr, pred_AS_arr, pred_B_arr = [], [], [], []
+        fn, patient, view, age, echo_id, as_label,bicuspid = [], [], [], [], [], [],[]
+        target_AS_arr, target_B_arr, pred_AS_arr, logits_arr = [], [], [], []
         max_AS_arr, entropy_AS_arr, vacuity_AS_arr, uni_AS_arr = [], [], [], []
         #max_B_arr, entropy_B_arr, vacuity_B_arr = [], [], []
         predicted_qual = []
@@ -457,6 +463,7 @@ class Network(object):
                 
             # collect metadata from data_info
             fn.append(data_info['path'][0])
+            echo_id.append(data_info['Echo ID#'][0])
             patient.append(int(data_info['patient_id'][0]))
             view.append(data_info['view'][0])
             age.append(int(data_info['age'][0]))
@@ -470,11 +477,11 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs,_ = self.model(cine) # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine) # Bx3xTxHxW
             # collect the model prediction info
-            argm, max_p, ent, vac, uni = self._get_prediction_stats(pred_AS, self.num_classes_AS)
+            argm, max_p, ent, vac, uni, logits = self._get_prediction_stats(pred_AS, self.num_classes_AS)
             pred_AS_arr.append(argm.cpu().numpy()[0])
             max_AS_arr.append(max_p.cpu().numpy()[0])
             entropy_AS_arr.append(ent.cpu().numpy()[0])
@@ -483,15 +490,16 @@ class Network(object):
             else:
                 vacuity_AS_arr.append(vac)
             uni_AS_arr.append(uni[0])
+            logits_arr.append(logits.cpu().numpy()[0])
             
             if record_embeddings:
                 embeddings += [embedding[0].squeeze().numpy()]
 
                 
         # compile the information into a dictionary
-        d = {'path':fn, 'id':patient, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
+        d = {'path':fn, 'id':patient, 'echo_id': echo_id, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
              'GT_AS':target_AS_arr, 'pred_AS':pred_AS_arr, 'max_AS':max_AS_arr,
-             'ent_AS':entropy_AS_arr, 'vac_AS':vacuity_AS_arr, 'uni_AS':uni_AS_arr,
+             'ent_AS':entropy_AS_arr, 'vac_AS':vacuity_AS_arr, 'uni_AS':uni_AS_arr, 'logits': logits_arr,
              # 'GT_B':target_B_arr, 'pred_B':pred_B_arr, 'max_B':max_B_arr,
              # 'ent_B':entropy_B_arr, 'vac_B':vacuity_B_arr, 
              }
