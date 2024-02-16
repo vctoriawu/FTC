@@ -2,12 +2,12 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
-    config['mode'] = "test"
-    config['use_wandb'] = False
+    config['mode'] = "train"
+    config['use_wandb'] = True
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/tad_1e-4_tclloss_batch16"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/tad_1e-4_tclloss_batch16"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_loss"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_loss"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax

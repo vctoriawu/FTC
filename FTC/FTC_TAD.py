@@ -243,6 +243,7 @@ class FTC(nn.Module):
 
         # Map video embeddings to video+tab embeddings
         self.map_embed = EmbeddingMappingFunction(embedding_dim, embedding_dim, embedding_dim)
+        self.vt_proj_head = EmbeddingMappingFunction(embedding_dim, embedding_dim, embedding_dim)
 
     def forward(self, x, tab_x, split):   
         # Video dimension (B x F x C x H x W)
@@ -285,6 +286,7 @@ class FTC(nn.Module):
 
                 #cross attention between video and tabular embeddings
                 ca_outputs = self.cross_attention(outputs, tab_x)
+                ca_outputs = self.vt_proj_head(ca_outputs)
 
                 # we want to get ca_outputs from outputs using our embedding mapping function
                 learned_joint_emb = self.map_embed(outputs)
@@ -321,7 +323,7 @@ class FTC(nn.Module):
                 as_ca_predictions = as_prediction
             
             # attention weights B x F x 1
-            att_weight = self.attentionweights(ca_outputs)
+            att_weight = self.attentionweights(learned_joint_emb)
             #print(att_weight.shape,outputs.shape)
             att_weight = nn.functional.softmax(att_weight, dim=1)
             # B x T x 4   =>  B x 4

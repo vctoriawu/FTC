@@ -10,12 +10,12 @@ from tqdm import tqdm
 
 from losses import laplace_cdf_loss, laplace_cdf
 from losses import evidential_loss, evidential_prob_vacuity
-from losses import SupConLoss
+from losses import SupConLoss, CLIPLoss
 from visualization.vis import plot_tsne_visualization
 import dataloader.utils as utils
 from utils import validation_constructive
 from pathlib import Path
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score
 
 class TransformerFeatureMap:
     def __init__(self, model, layer_name='avgpool'):
@@ -96,8 +96,7 @@ class Network(object):
         self._init_aux()
 
         # loss for the embedding space
-        self.embed_loss_cos = torch.nn.CosineSimilarity() 
-        self.embed_loss_mse = torch.nn.MSELoss()
+        self.embed_loss_cos = CLIPLoss(temperature=0.1, lambda_0=0.5)
 
         # self._restore('../checkpoint.pth')
 
@@ -264,8 +263,7 @@ class Network(object):
                             pred_AS,entropy_attention,outputs, _, ca_preds, learned_emb, ca_embed = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
-                            ca_emb_loss = self.embed_loss_cos(learned_emb, ca_embed)
-                            ca_emb_loss = torch.mean(1 - ca_emb_loss) + self.embed_loss_mse(learned_emb, ca_embed)
+                            ca_emb_loss, _, _ = self.embed_loss_cos(learned_emb, ca_embed, target_AS)
 
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -278,7 +276,7 @@ class Network(object):
                             ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
                              
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-                            loss =  ca_emb_loss + 0.5*ca_loss + 0.5*loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss =  0.5*ca_emb_loss + 0.5*ca_loss + loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 
                         
                         else:
@@ -398,6 +396,8 @@ class Network(object):
         conf_AS = np.zeros((self.num_classes_AS, self.num_classes_AS))
         #conf_B = np.zeros((2,2))
         losses = []
+        preds = []
+        gt = []
         for data in tqdm(loader_te):
             cine = data[0]
             tab_data = data[1]
@@ -451,9 +451,14 @@ class Network(object):
                 #argm_B, _, _, _, _ = self._get_prediction_stats(pred_B, 2)
                 conf_AS = utils.update_confusion_matrix(conf_AS, target_AS.cpu(), argm_AS.cpu())
                 #conf_B = utils.update_confusion_matrix(conf_B, target_B.cpu(), argm_B.cpu())
+            
+            preds.append(argm_AS.cpu().numpy())
+            gt.append(target_AS.cpu().numpy())
         if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':    
             loss_avg = torch.mean(torch.stack(losses)).item()
-            acc_AS = utils.balanced_acc_from_confusion_matrix(conf_AS)
+            preds = [x for xs in preds for x in xs]
+            gt = [x for xs in gt for x in xs]
+            acc_AS = balanced_accuracy_score(gt, preds) #utils.balanced_acc_from_confusion_matrix(conf_AS)
             print(conf_AS)
             #f1_B = utils.f1_from_confusion_matrix(conf_B)
 
