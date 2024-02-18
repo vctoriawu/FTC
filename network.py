@@ -82,7 +82,7 @@ class Network(object):
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,T_max=config['num_epochs'])
+            self.optimizer,T_max=config['num_epochs'], eta_min=0.000001)
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
         self.temperature = config['temp']
@@ -120,7 +120,7 @@ class Network(object):
 
         # We save model that achieves the best performance: early stopping strategy.
         self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
-        #self.bestmodel_file = Path('/workspace/miccai2024_savedmodels/FTC/logs/ftc_baseline_3/best_model.pth')
+        #self.bestmodel_file = Path('/workspace/miccai2024_savedmodels/FTC/logs/ftc_3_class/ftc_3_class/best_model.pth')
         self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
         
         # For test, we also save the results dataframe
@@ -147,7 +147,7 @@ class Network(object):
         # Read checkpoint file.
         load_res = torch.load(pt_file)
         # Loading model.
-        self.model.load_state_dict(load_res["model"])
+        self.model.load_state_dict(load_res["model"], strict=False)
         # Loading optimizer.
         self.optimizer.load_state_dict(load_res["optimizer"])
         

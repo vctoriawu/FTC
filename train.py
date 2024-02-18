@@ -10,11 +10,11 @@ import wandb
 
 if __name__ == "__main__":
     
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "5"
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke",config = config, name = 'ftc_3_class')
+        run = wandb.init(project="as_tab", entity="rcl_stroke",config = config, name = 'ftc_4_class_2')
     
     model = get_model(config)
     net = Network(model, config)
@@ -27,11 +27,11 @@ if __name__ == "__main__":
     
     if config['mode']=="train":
         net.train(dataloader_tr, dataloader_va,dataloader_test)
-        #net.test_comprehensive(dataloader_te, mode="test")
+        net.test_comprehensive(dataloader_te, mode="test", record_embeddings=False)
     if config['mode']=="ssl":
         net.train(dataloader_ssl, dataloader_va)
         #net.test_comprehensive(dataloader_te, mode="test")
     if config['mode']=="test":
-        net.test_comprehensive(dataloader_validation, mode="test", record_embeddings=False)
+        net.test_comprehensive(dataloader_te, mode="test", record_embeddings=False)
     if config['use_wandb']:
         wandb.finish()
