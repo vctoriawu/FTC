@@ -276,7 +276,7 @@ class Network(object):
                             ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
                              
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-                            loss =  0.5*ca_emb_loss + 0.5*ca_loss + loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss = 0.25*ca_emb_loss + loss + 0.5*ca_loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 
                         
                         else:
@@ -417,7 +417,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS, _, _, _, _, learned_emb, ca_embed = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)

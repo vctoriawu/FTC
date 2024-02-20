@@ -332,6 +332,10 @@ class FTC(nn.Module):
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
             
+            # Calculate the embeddings for CLIP loss
+            learned_joint_emb = (learned_joint_emb * att_weight).sum(1)
+            ca_outputs = (ca_outputs * att_weight).sum(1)
+
         elif method == "attention_resbranch":
             # B x F x Emb => B x T x 4
             as_prediction = self.aorticstenosispred(outputs)

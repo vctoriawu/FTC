@@ -12,7 +12,7 @@ if __name__ == "__main__":
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4_class_CLIP_loss')
+        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4_class_CLIP_1d')
     
     model = get_model(config)
     net = Network(model, config)
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     
     if config['mode']=="train":
         net.train(dataloader_tr, dataloader_va,dataloader_test)
-        #net.test_comprehensive(dataloader_te, mode="test")
+        net.test_comprehensive(dataloader_te, mode="test")
     if config['mode']=="ssl":
         net.train(dataloader_ssl, dataloader_va)
         #net.test_comprehensive(dataloader_te, mode="test")

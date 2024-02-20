@@ -220,13 +220,13 @@ class CLIPLoss(torch.nn.Module):
     out1 = nn.functional.normalize(out1, dim=1)
 
     #logits = torch.matmul(out0, out1.T) * torch.exp(torch.tensor(self.temperature))
-    logits = torch.matmul(out0, out1.permute(0, 2, 1)) / self.temperature
+    logits = torch.matmul(out0, out1.T) / self.temperature
     labels = torch.arange(len(out0), device=out0.device)
 
-    labels = labels.unsqueeze(1).expand(labels.shape[0], logits.shape[1])
+    #labels = labels.unsqueeze(1).expand(labels.shape[0], logits.shape[1])
 
     loss_0 = self.lambda_0 * self.cross_entropy(logits, labels)
-    loss_1 = self.lambda_1 * self.cross_entropy(logits.permute(0, 2, 1), labels)
+    loss_1 = self.lambda_1 * self.cross_entropy(logits.T, labels)
     loss = loss_0 + loss_1
   
     return loss, logits, labels
