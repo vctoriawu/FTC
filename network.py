@@ -9,7 +9,7 @@ from tqdm import tqdm
 #from torchsummary import summary
 
 from losses import laplace_cdf_loss, laplace_cdf
-from losses import evidential_loss, evidential_prob_vacuity
+from losses import evidential_loss, evidential_prob_vacuity, loss_coteaching
 from losses import SupConLoss, CLIPLoss
 from visualization.vis import plot_tsne_visualization
 import dataloader.utils as utils
@@ -231,6 +231,7 @@ class Network(object):
         self.model.train()
         best_va_acc = 0.0 # Record the best validation metrics.
         best_va_acc_supcon = 0.0
+        forget_rate = 0.1
         best_cont_loss = 1000
 
         gradient_accumulation_steps = 9
@@ -239,6 +240,8 @@ class Network(object):
             #losses_AS = []
             #losses_B = []
             losses = []
+            correct_predictions = 0
+            total_samples = 0
             print('Epoch: ' + str(epoch) + ' LR: ' + str(self.optimizer.param_groups[0]["lr"])) #get_lr()))
             
             with tqdm(total=len(loader_tr)) as pbar:
@@ -260,10 +263,10 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _, ca_preds, learned_emb, ca_embed = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, _, ca_preds = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
-                            ca_emb_loss, _, _ = self.embed_loss_cos(learned_emb, ca_embed, target_AS)
+                            #ca_emb_loss, _, _ = self.embed_loss_cos(learned_emb, ca_embed, target_AS)
 
                             # Calculating temporal coherent npair loss
                             similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
@@ -273,10 +276,12 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
-                            ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
-                             
-                            loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-                            loss = 0.25*ca_emb_loss + loss + 0.5*ca_loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            #ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)                           
+                            #loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+
+                            loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
+
+                            loss = loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 
                         
                         else:
@@ -305,6 +310,11 @@ class Network(object):
 
                         losses += [loss]
                         
+                    # Calculate the training accuracy
+                    _, predicted = torch.max(pred_AS, 1)
+                    correct_predictions += (predicted == target_AS).sum().item()
+                    total_samples += target_AS.size(0)
+
                     # Calculate the gradient.
                     # grad_loss = loss / gradient_accumulation_steps
                     loss.backward()
@@ -347,8 +357,8 @@ class Network(object):
                 #     % (epoch, loss_avg_AS, loss_avg_B, val_loss, acc_AS, f1_B, best_va_acc, best_B_f1)
                 # )
                 print(
-                    "Epoch: %3d, loss: %.5f, val loss: %.5f, acc: %.5f, top AS acc: %.5f"
-                    % (epoch, loss_avg, val_loss, acc_AS, best_va_acc)
+                    "Epoch: %3d, loss: %.5f, train acc: %.5f, val loss: %.5f, acc: %.5f, top AS acc: %.5f"
+                    % (epoch, loss_avg, (correct_predictions / total_samples), val_loss, acc_AS, best_va_acc)
                 ) 
 
                 # Recording training losses and validation performance.
@@ -417,7 +427,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _, _, learned_emb, ca_embed = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
@@ -514,7 +524,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight, _, _, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, att_weight, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info
