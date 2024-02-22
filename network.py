@@ -231,7 +231,7 @@ class Network(object):
         self.model.train()
         best_va_acc = 0.0 # Record the best validation metrics.
         best_va_acc_supcon = 0.0
-        forget_rate = 0.1
+        forget_rate = 0.0625
         best_cont_loss = 1000
 
         gradient_accumulation_steps = 9
