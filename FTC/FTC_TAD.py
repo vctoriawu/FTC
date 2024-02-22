@@ -324,17 +324,19 @@ class FTC(nn.Module):
             
             # attention weights B x F x 1
             att_weight = self.attentionweights(learned_joint_emb)
+            ca_att_weight = self.attentionweights(ca_outputs)
             #print(att_weight.shape,outputs.shape)
             att_weight = nn.functional.softmax(att_weight, dim=1)
+            ca_att_weight = nn.functional.softmax(ca_att_weight, dim=1)
             # B x T x 4   =>  B x 4
             as_prediction = (as_prediction * att_weight).sum(1)
-            as_ca_predictions = (as_ca_predictions * att_weight).sum(1)
+            as_ca_predictions = (as_ca_predictions * ca_att_weight).sum(1)
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
             
             # Calculate the embeddings for CLIP loss
             learned_joint_emb = (learned_joint_emb * att_weight).sum(1)
-            ca_outputs = (ca_outputs * att_weight).sum(1)
+            ca_outputs = (ca_outputs * ca_att_weight).sum(1)
 
         elif method == "attention_resbranch":
             # B x F x Emb => B x T x 4

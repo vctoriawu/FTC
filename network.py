@@ -79,9 +79,26 @@ class Network(object):
         else:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
-                                                                    T_max=config['num_epochs'],
-                                                                    eta_min = 0.000001)
+
+        # Get learning rate schedule from config
+        self.lr_schedule = config.get('lr_schedule', 'CosineAnnealingLR')
+
+        if self.lr_schedule == 'CosineAnnealingLR':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=config['num_epochs'], eta_min=0.000001)
+        elif self.lr_schedule == 'StepLR':
+            # Adjust parameters as needed
+            step_size = 30
+            gamma = 0.1
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=step_size, gamma=gamma)
+        elif self.lr_schedule == 'ReduceLROnPlateau':
+            # Adjust parameters as needed
+            patience = 5
+            factor = 0.1
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=patience, factor=factor)
+        elif self.lr_schedule == 'OneCycleLR':
+            # Adjust parameters as needed
+            max_lr = 0.001
+            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=max_lr)
         
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
@@ -96,7 +113,13 @@ class Network(object):
         self._init_aux()
 
         # loss for the embedding space
-        self.embed_loss_cos = CLIPLoss(temperature=0.1, lambda_0=0.5)
+        self.embed_loss_cos = CLIPLoss(config['clip_temp'], config['clip_lambda'])
+
+        self.clip_emb_loss = config["clip_emb_loss"]
+        self.vid_loss = config["vid_loss"]
+        self.vid_tab_loss = config["vid_tab_loss"]
+        self.entropy_attention_loss = config["entropy_attention_loss"]
+        self.n_pair_loss = config["n_pair_loss"]
 
         # self._restore('../checkpoint.pth')
 
@@ -276,7 +299,7 @@ class Network(object):
                             ca_loss = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
                              
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-                            loss = 0.25*ca_emb_loss + loss + 0.5*ca_loss + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss = self.clip_emb_loss*ca_emb_loss + self.vid_loss*loss + self.vid_tab_loss*ca_loss + self.entropy_attention_loss*(torch.mean(entropy_attention)) +self.n_pair_loss*torch.mean(npair_loss)
                             losses += [loss] 
                         
                         else:
@@ -382,7 +405,15 @@ class Network(object):
                
             
             # modify the learning rate
-            self.scheduler.step(val_loss)   
+            if self.lr_schedule == 'CosineAnnealingLR':
+                self.scheduler.step(epoch)
+            elif self.lr_schedule == 'OneCycleLR':
+                # Calculate total_steps based on loader information
+                total_steps = len(loader_tr) * self.config['num_epochs']
+                self.scheduler.total_steps = total_steps
+                self.scheduler.step()
+
+            #self.scheduler.step(val_loss)   
 
     @torch.no_grad()
     def test(self, loader_te, mode="test"):

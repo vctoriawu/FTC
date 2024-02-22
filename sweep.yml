@@ -1,0 +1,101 @@
+################### Experiment information ######################
+method: random
+entity: "rcl_stroke"
+project: "as_tab"
+name: "Sweep_as_tab"
+description: Sweeping as_tab model tracking balanced accuracy
+
+SWEEP_ID: "rcl_stroke/as_tab/6j7vhyht"
+SWEEP_COUNT: 1
+
+metric: 
+  goal: maximize
+  name: val_AS_acc
+
+parameters:
+  mode: 
+    value: ["train"]
+  use_wandb: 
+    value: [true]
+  use_cuda: 
+    value: [true]
+  seed: 
+    value: 100
+  log_dir: 
+    value: ["/workspace/miccai2024_savedmodels/FTC/logs"]
+  model_load_dir:
+    value: ["/workspace/miccai2024_savedmodels/FTC/logs/sweep_CLIP"]
+  best_model_dir:
+    value: ["/workspace/miccai2024_savedmodels/FTC/logs/sweep_CLIP"]
+
+  # Hyperparameters for dataset.
+  view: 
+    value: 'all'  # all/plax/psax
+  flip_rate:
+    value: 0.3
+  label_scheme_name:
+    value: 'all'
+  num_classes: 
+    value: 4
+
+  # Hyperparameters for tabular dataset.
+  use_tab:
+    value: [true]
+  scale_feats:
+    value: [true]
+  num_ex:
+    value: [null]
+  drop_cols: 
+    value: []
+  categorical_cols:
+    value: []
+
+  # Hyperparameters for models.
+  model:
+    value: "FTC_TAD"  # r2plus1d_18/x3d/resnet50/slowfast/tvn/FTC
+  pretrained:
+    value: [false]
+  restore:
+    value: [true]
+  loss_type:
+    value: cross_entropy  # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
+
+  # Hyperparameters for Contrastive Learning
+  cotrastive_method:
+    values: ['CE']  # 'CE'/'SupCon'/'SimCLR'/Linear
+  feature_dim:
+    values: [512, 1024]
+  temp:
+    values: [0.1]
+
+  # Hyperparameters for training.
+  batch_size: 
+    values: [10, 16, 32]
+  num_epochs:
+    values: [30, 50, 100]  # 110
+  lr: 
+    values: [0.001, 0.0005, 0.0001, 0.00005, 0.00001]  # 1e-4 for Resnet2+1D, 1e-5 for FTC
+  lr_schedule:
+    values:
+      - ReduceLROnPlateau
+      - StepLR
+      - CosineAnnealingLR
+      - OneCycleLR
+  sampler:
+    values: ['AS', 'random']  # imbalanced sampling based on AS/bicuspid/random
+
+  # CLIP loss hyperparameters
+  clip_temp: 
+    values: [0.1, 0.25, 0.5]
+  clip_lambda: 
+    values: [0.25, 0.5, 0.75]
+  clip_emb_loss:
+    values: [0, 0.1, 0.25, 0.5, 1]
+  vid_loss:
+    values: [0.5, 0.75, 1]
+  vid_tab_loss:
+    values: [0, 0.1, 0.5]
+  entropy_attention_loss:
+    values: [0, 0.05, 0.1]
+  n_pair_loss:
+    values: [0, 0.1, 0.2]
