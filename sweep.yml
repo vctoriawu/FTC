@@ -5,7 +5,7 @@ project: "as_tab"
 name: "Sweep_as_tab"
 description: Sweeping as_tab model tracking balanced accuracy
 
-SWEEP_ID: "rcl_stroke/as_tab/m7u25dx9"
+SWEEP_ID: "rcl_stroke/as_tab/6z42pweh"
 SWEEP_COUNT: 1
 
 metric: 
@@ -22,11 +22,11 @@ parameters:
   seed: 
     value: 100
   log_dir: 
-    value: ["/workspace/miccai2024_savedmodels/FTC/logs"]
+    value: ["logs/ASTab"]
   model_load_dir:
-    value: ["/workspace/miccai2024_savedmodels/FTC/logs/sweep_CLIP"]
+    value: ["logs/ASTab/sweep_CLIP"]
   best_model_dir:
-    value: ["/workspace/miccai2024_savedmodels/FTC/logs/sweep_CLIP"]
+    value: ["logs/ASTab/sweep_CLIP"]
 
   # Hyperparameters for dataset.
   view: 

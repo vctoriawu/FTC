@@ -35,12 +35,6 @@ conda activate /arc/project/st-puranga-1/users/victoriawu/conda_envs/Torch_AS_Ta
 cd /scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC
 #cd $SLURM_SUBMIT_DIR
 
-export TQDM_DISABLE=1
-SWEEP_ID="rcl_stroke/as_tab/m7u25dx9"
+SWEEP_ID="rcl_stroke/as_tab/6z42pweh"
 
-
-CONFIG_YML="sweep.yml"
-NAME="ASTab_"$SLURM_ARRAY_JOB_ID"_"$SLURM_ARRAY_TASK_ID
-RUNNAME=$NAME"_00"
-SAVE_DIR="logs/ASTab/"$RUNNAME
 python sweep.py
