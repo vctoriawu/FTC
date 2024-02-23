@@ -10,13 +10,13 @@ SWEEP_SETUP
 CONFIG_YML="sweep.yml"
 
 ##### Step 1: Uncomment to setup the controller, and copy the SWEEP_ID that is returned
-#wandb sweep $CONFIG_YML
+wandb sweep $CONFIG_YML
 
 ##################################################
 ##### Step 2: Paste the SWEEP_ID here
 ##################################################
 #### CLIP Loss
-SWEEP_ID="rcl_stroke/as_tab/ynbsblx3"
+#SWEEP_ID="rcl_stroke/as_tab/ynbsblx3"
 
 
 ##### Uncomment the line bellow to update the controller's config! After running an agent, this will not work anymore and a new controller needs to be setup
@@ -36,8 +36,8 @@ RUNNAME=$NAME"_00"
 SAVE_DIR="logs/sweep/"$RUNNAME
 #
 ##### First GPU, depending on sweep.py's wandb.agent's count, this is repeated that many times
-export CUDA_VISIBLE_DEVICES=0
-python sweep.py
+#export CUDA_VISIBLE_DEVICES=0
+#python sweep.py
 #
 #sleep 60
 #
