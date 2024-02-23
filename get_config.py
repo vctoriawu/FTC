@@ -6,8 +6,8 @@ def get_config():
     config['use_wandb'] = True
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_2"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_2"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_3"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_3"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
@@ -44,7 +44,7 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 75 #110
+    config['num_epochs'] = 100 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'AS' # imbalanced sampling based on AS/bicuspid/random
  

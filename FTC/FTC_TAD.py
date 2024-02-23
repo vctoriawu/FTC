@@ -78,8 +78,8 @@ class EmbeddingMappingFunction(nn.Module):
         super(EmbeddingMappingFunction, self).__init__()
         self.fc1 = nn.Linear(video_dim, hidden_dim)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, tabular_dim)
+        self.fc2 = nn.Linear(hidden_dim, tabular_dim)
+        #self.fc3 = nn.Linear(hidden_dim, tabular_dim)
         
         self.layernorm = nn.LayerNorm(hidden_dim)
 
@@ -106,9 +106,9 @@ class EmbeddingMappingFunction(nn.Module):
         x = self.layernorm(x)
         x = self.relu(x)
         x = self.fc2(x)
-        x = self.layernorm(x)
-        x = self.relu(x)
-        x = self.fc3(x)
+        #x = self.layernorm(x)
+        #x = self.relu(x)
+        #x = self.fc3(x)
 
         # Add the residual connection
         x += residual
@@ -289,7 +289,7 @@ class FTC(nn.Module):
                 ca_outputs = self.vt_proj_head(ca_outputs)
 
                 # we want to get ca_outputs from outputs using our embedding mapping function
-                #learned_joint_emb = self.map_embed(outputs)
+                learned_joint_emb = self.map_embed(outputs)
         else:
             print("Cross-attention module has been skipped.")
             #outputs = self.map_embed(outputs)
@@ -313,7 +313,7 @@ class FTC(nn.Module):
             
         elif method == "attention":
             # B x F x Emb => B x T x 4
-            as_prediction = self.aorticstenosispred(outputs) #learned_joint_emb)
+            as_prediction = self.aorticstenosispred(learned_joint_emb)
 
             # cross attention preds
             if split=='Train':
@@ -323,7 +323,7 @@ class FTC(nn.Module):
                 as_ca_predictions = as_prediction
             
             # attention weights B x F x 1
-            att_weight = self.attentionweights(outputs) #learned_joint_emb)
+            att_weight = self.attentionweights(learned_joint_emb)
             ca_att_weight = self.attentionweights(ca_outputs)
 
             #print(att_weight.shape,outputs.shape)
@@ -336,8 +336,8 @@ class FTC(nn.Module):
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
             
             # Calculate the embeddings for CLIP loss
-            #learned_joint_emb = (learned_joint_emb * att_weight).sum(1)
-            #ca_outputs = (ca_outputs * att_weight).sum(1)
+            learned_joint_emb = (learned_joint_emb).sum(1)
+            ca_outputs = (ca_outputs).sum(1)
 
         elif method == "attention_resbranch":
             # B x F x Emb => B x T x 4
@@ -352,7 +352,7 @@ class FTC(nn.Module):
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
 
-        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions#, learned_joint_emb, ca_outputs
+        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions, learned_joint_emb, ca_outputs
 
 def get_model_tad(emb_dim, 
               tab_input_dim, 
