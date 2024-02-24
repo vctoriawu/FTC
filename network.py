@@ -95,10 +95,6 @@ class Network(object):
             patience = 5
             factor = 0.1
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=patience, factor=factor)
-        elif self.lr_schedule == 'OneCycleLR':
-            # Adjust parameters as needed
-            max_lr = 0.001
-            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=max_lr)
         
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
@@ -255,6 +251,12 @@ class Network(object):
         best_va_acc = 0.0 # Record the best validation metrics.
         best_va_acc_supcon = 0.0
         best_cont_loss = 1000
+
+        if self.lr_schedule == 'OneCycleLR':
+            # Adjust parameters as needed
+            max_lr = 0.001
+            total_steps = len(loader_tr) * self.config['num_epochs']
+            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=max_lr, total_steps=total_steps)
 
         gradient_accumulation_steps = 9
             

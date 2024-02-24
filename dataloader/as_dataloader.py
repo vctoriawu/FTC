@@ -176,14 +176,14 @@ def get_as_dataloader(config, split, mode):
     if mode=='train':
         if config['sampler'] == 'AS':
             sampler_AS, _ = dset.class_samplers()
-            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_AS, num_workers=10)
+            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_AS, num_workers=6)
         elif config['sampler'] == 'bicuspid':
             _ , sampler_B = dset.class_samplers()
-            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B, num_workers=10)
+            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B, num_workers=6)
         else: # random sampling
-            loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=10)
+            loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=6)
     else:
-        loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=10)
+        loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=6)
     return loader
     
 
