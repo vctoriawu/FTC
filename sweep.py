@@ -46,7 +46,7 @@ def train():
             project="as_tab", 
             entity="rcl_stroke", 
             config = config, 
-            name = '4_class_CLIP')
+            name = '3_class_CLIP')
     
     # Update config based on wandb sweep selected configs
     config_wandb = wandb.config

@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=Sweep_ASTab_%A_%a
 #SBATCH --account=st-puranga-1-gpu
-#SBATCH --time=48:00:00
+#SBATCH --time=30I :00:00
 #SBATCH --nodes=1                               # Number of nodes
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6                       # CPU cores per MPI process
@@ -35,6 +35,6 @@ conda activate /arc/project/st-puranga-1/users/victoriawu/conda_envs/Torch_AS_Ta
 cd /scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC
 #cd $SLURM_SUBMIT_DIR
 
-SWEEP_ID="rcl_stroke/as_tab/2r2v3qjk"
+SWEEP_ID="rcl_stroke/as_tab/hkp6611f"
 
 python sweep.py
