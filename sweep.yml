@@ -5,7 +5,7 @@ project: "as_tab"
 name: "Sweep_as_tab"
 description: Sweeping as_tab model tracking balanced accuracy
 
-SWEEP_ID: "rcl_stroke/as_tab/zmhqwo9a"
+SWEEP_ID: "rcl_stroke/as_tab/upwzky3p"
 SWEEP_COUNT: 1
 
 metric: 
@@ -70,7 +70,7 @@ parameters:
 
   # Hyperparameters for training.
   batch_size: 
-    values: [64]
+    values: [40]
   num_epochs:
     values: [75]  # 110
   lr: 
