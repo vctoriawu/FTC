@@ -5,7 +5,7 @@ project: "as_tab"
 name: "Sweep_as_tab"
 description: Sweeping as_tab model tracking balanced accuracy
 
-SWEEP_ID: "rcl_stroke/as_tab/hkp6611f"
+SWEEP_ID: "rcl_stroke/as_tab/zmhqwo9a"
 SWEEP_COUNT: 1
 
 metric: 
@@ -24,9 +24,9 @@ parameters:
   log_dir: 
     value: ["logs/ASTab"]
   model_load_dir:
-    value: ["logs/ASTab/sweep_CLIP_3"]
+    value: ["logs/ASTab/sweep_CLIP"]
   best_model_dir:
-    value: ["logs/ASTab/sweep_CLIP_3"]
+    value: ["logs/ASTab/sweep_CLIP"]
 
   # Hyperparameters for dataset.
   view: 
@@ -34,9 +34,9 @@ parameters:
   flip_rate:
     value: 0.3
   label_scheme_name:
-    value: 'tufts'
+    value: 'all'
   num_classes: 
-    value: 3
+    value: 4
 
   # Hyperparameters for tabular dataset.
   use_tab:

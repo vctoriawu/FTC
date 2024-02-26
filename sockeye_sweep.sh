@@ -35,6 +35,6 @@ conda activate /arc/project/st-puranga-1/users/victoriawu/conda_envs/Torch_AS_Ta
 cd /scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC
 #cd $SLURM_SUBMIT_DIR
 
-SWEEP_ID="rcl_stroke/as_tab/hkp6611f"
+SWEEP_ID="rcl_stroke/as_tab/zmhqwo9a"
 
 python sweep.py
