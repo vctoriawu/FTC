@@ -12,11 +12,11 @@ def get_config():
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
-    config['label_scheme_name'] = 'all'
+    config['label_scheme_name'] = 'tufts'
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
     # number of AS classes
-    config['num_classes'] = 4
+    config['num_classes'] = 3
 
 
     #Hyperaparameters for tabular dataset.
