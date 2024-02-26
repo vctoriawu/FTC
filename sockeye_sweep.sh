@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=Sweep_ASTab_%A_%a
 #SBATCH --account=st-puranga-1-gpu
-#SBATCH --time=30I :00:00
+#SBATCH --time=30:00:00
 #SBATCH --nodes=1                               # Number of nodes
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6                       # CPU cores per MPI process
