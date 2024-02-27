@@ -46,6 +46,6 @@ def get_config():
     config['batch_size'] = 16
     config['num_epochs'] = 100 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
-    config['sampler'] = 'AS' # imbalanced sampling based on AS/bicuspid/random
+    config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
  
     return config
