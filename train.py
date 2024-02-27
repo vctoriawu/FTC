@@ -10,11 +10,11 @@ import wandb
 
 if __name__ == "__main__":
     
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke",config = config, name = 'ftc_3_class_3')
+        run = wandb.init(project="as_tab", entity="rcl_stroke",config = config, name = 'ftc_4_class_5')
     
     model = get_model(config)
     net = Network(model, config)

@@ -5,16 +5,16 @@ def get_config():
     config['mode'] = "train"
     config['use_wandb'] = True
     config['use_cuda'] = True
-    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_3_class_3"
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_4_class_5"
     config['model_load_dir'] = None # required for test-only mode
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
-    config['label_scheme_name'] = 'tufts'
+    config['label_scheme_name'] = 'all'
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
-    config['num_classes'] = 3
+    config['num_classes'] = 4
     
     # Hyperparameters for bicuspid valve branch
     # config['bicuspid_weight'] = 1.0 # default is 1.0
@@ -34,6 +34,6 @@ def get_config():
     config['batch_size'] = 16
     config['num_epochs'] = 100
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
-    config['sampler'] = 'random' # imbalanaced sampling based on AS/bicuspid/random
+    config['sampler'] = 'AS' # imbalanaced sampling based on AS/bicuspid/random
  
     return config
