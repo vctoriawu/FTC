@@ -226,7 +226,7 @@ class Network(object):
         max_percentage, argm = torch.max(prob, dim=1)
         entropy = torch.sum(-prob*torch.log(prob), dim=1)
         uni = utils.test_unimodality(prob.cpu().numpy())
-        return argm, max_percentage, entropy, vacuity, uni, prob
+        return argm, max_percentage, entropy, vacuity, uni, logits
         
     def train(self, loader_tr, loader_va,loader_te):
         """Training pipeline."""
@@ -460,6 +460,9 @@ class Network(object):
                                      format(self.config['cotrastive_method']))
                 losses += [loss]
             
+            if self.config["abstention"]:
+                pred_AS = pred_AS[:, : self.num_classes_AS]
+
             #argmax_pred_AS = torch.argmax(pred_AS, dim=1)
             #argmax_pred_B = torch.argmax(pred_B, dim=1)
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':
