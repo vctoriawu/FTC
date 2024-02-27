@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from losses import laplace_cdf_loss, laplace_cdf
 from losses import evidential_loss, evidential_prob_vacuity, loss_coteaching
-from losses import SupConLoss, CLIPLoss
+from losses import SupConLoss, CLIPLoss, CeLossAbstain
 from visualization.vis import plot_tsne_visualization
 import dataloader.utils as utils
 from utils import validation_constructive
@@ -97,6 +97,9 @@ class Network(object):
 
         # loss for the embedding space
         self.embed_loss_cos = CLIPLoss(temperature=0.1, lambda_0=0.5)
+
+        if self.config["abstention"]:
+            self.abstention_loss = CeLossAbstain(loss_weight=1, ab_weight=0.3, reduction="mean", ab_logitpath="joined")
 
         # self._restore('../checkpoint.pth')
 
@@ -279,7 +282,10 @@ class Network(object):
                             #loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)                           
                             #loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
 
-                            loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
+                            if self.config['abstention'] == True:
+                                loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
+                            else:    
+                                loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
 
                             loss = 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 

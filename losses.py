@@ -232,7 +232,7 @@ class CLIPLoss(torch.nn.Module):
   
     return loss, logits, labels
 
-def loss_coteaching(y_1, y_2, t, forget_rate):
+def loss_coteaching(y_1, y_2, t, forget_rate, abs_loss=None):
     loss_1 = F.cross_entropy(y_1, t, reduce = False)
     ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
     loss_1_sorted = loss_1[ind_1_sorted]
@@ -246,7 +246,61 @@ def loss_coteaching(y_1, y_2, t, forget_rate):
     ind_1_update=ind_1_sorted[:num_remember]
     ind_2_update=ind_2_sorted[:num_remember]
     # exchange
-    loss_1_update = F.cross_entropy(y_1[ind_2_update], t[ind_2_update])
-    loss_2_update = F.cross_entropy(y_2[ind_1_update], t[ind_1_update])
+    if abs_loss is None:
+        loss_1_update = F.cross_entropy(y_1[ind_2_update], t[ind_2_update])
+        loss_2_update = F.cross_entropy(y_2[ind_1_update], t[ind_1_update])
+    else:    
+        loss_1_update = abs_loss.compute(y_1[ind_2_update], t[ind_2_update])
+        loss_2_update = abs_loss.compute(y_2[ind_1_update], t[ind_1_update])
 
     return torch.sum(loss_1_update), torch.sum(loss_2_update)
+
+class CeLossAbstain(object):
+    """
+    Cross-entropy-like loss. Introduces a K+1-th class, abstention, which is a
+    learned estimate of aleatoric uncertainty. When the network abstains,
+    the loss will be computed with the ground truth, but, the network incurs
+    loss for using the abstension
+    """
+
+    def __init__(self, loss_weight=1, ab_weight=0.3, reduction="sum", ab_logitpath="joined"):
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+        self.ab_weight = ab_weight
+        self.ab_logitpath = ab_logitpath
+        self.criterion = nn.NLLLoss(reduction=reduction)
+        assert self.ab_logitpath == "joined" or self.ab_logitpath == "separate"
+        print(
+            f"setup CE Abstain Loss with loss_weight:{loss_weight}, "
+            + f"ab_penalty:{ab_weight}, ab_path:{ab_logitpath} and reduction:{reduction}"
+        )
+
+    def to(self, device):
+        self.criterion = self.criterion.to(device)
+
+    def compute(self, logits, target):
+        if self.loss_weight == 0:
+            return torch.tensor(0, device=target.device)
+
+        B, K_including_abs = logits.shape  # (B, K+1)
+        K = K_including_abs - 1
+        assert K >= 2, "CeLossAbstain input must have >= 2 classes not including abstention"
+
+        # virtual_pred = (1-alpha) * pred + alpha * target
+        if self.ab_logitpath == "joined":
+            abs_pred = logits.softmax(dim=1)[:, K : K + 1]  # (B, 1)
+        elif self.ab_logitpath == "separate":
+            abs_pred = logits.sigmoid()[:, K : K + 1]  # (B, 1)
+        class_pred = logits[:, :K].softmax(dim=1)  # (B, K)
+        target_oh = nn.functional.one_hot(target, num_classes=K)
+        virtual_pred = (1 - abs_pred) * class_pred + abs_pred * target_oh  # (B, K)
+
+        loss_pred = self.criterion(torch.log(virtual_pred), target)
+        loss_abs = -torch.log(1 - abs_pred).squeeze()  # (B)
+
+        if self.reduction == "mean":
+            loss_abs = loss_abs.mean()
+        elif self.reduction == "sum":
+            loss_abs = loss_abs.sum()
+
+        return self.loss_weight * (loss_pred + self.ab_weight * loss_abs)

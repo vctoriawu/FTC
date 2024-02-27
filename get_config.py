@@ -6,17 +6,17 @@ def get_config():
     config['use_wandb'] = True
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/3_class_coteaching"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/3_class_coteaching"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_abs"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_abs"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
     config['flip_rate'] = 0.3
-    config['label_scheme_name'] = 'tufts'
+    config['label_scheme_name'] = 'all'
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
     # number of AS classes
-    config['num_classes'] = 3
+    config['num_classes'] = 4
 
 
     #Hyperaparameters for tabular dataset.
@@ -41,11 +41,12 @@ def get_config():
     config['pretrained'] = False
     config['restore'] = True
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
+    config['abstention'] = True
 
     # Hyperparameters for training.
     config['batch_size'] = 16
     config['num_epochs'] = 100 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
-    config['sampler'] = 'random' # imbalanced sampling based on AS/bicuspid/random
+    config['sampler'] = 'AS' # imbalanced sampling based on AS/bicuspid/random
  
     return config
