@@ -5,7 +5,7 @@ def get_config():
     config['mode'] = "train"
     config['use_wandb'] = True
     config['use_cuda'] = True
-    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/ftc_4_class_5"
+    config['log_dir'] = "/scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC/logs/ftc_4_class_1"
     config['model_load_dir'] = None # required for test-only mode
 
     # Hyperparameters for dataset. 
