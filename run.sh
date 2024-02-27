@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=Baseline_FTC_%A_%a
-#SBATCH --account=st-puranga-1
+#SBATCH --account=st-puranga-1-gpu
 #SBATCH --reservation=st-puranga-1-gpu_8
 #SBATCH --time=20:00:00
 #SBATCH --nodes=1                               # Number of nodes
