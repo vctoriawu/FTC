@@ -75,7 +75,7 @@ def get_as_dataloader(config, split, mode):
     pre-determined splits
 
     '''
-    droot = r"arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom"
+    droot = r"/arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom"
     
     if mode=='train':
         flip=config['flip_rate']
@@ -150,7 +150,7 @@ class AorticStenosisDataset(Dataset):
         # read in the data directory CSV as a pandas dataframe
         
         #dataset = pd.read_csv(join(dataset_root, 'annotations-all.csv'))
-        dataset = pd.read_csv(join('arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom', 'annotations-all.csv'))
+        dataset = pd.read_csv(join('/arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom', 'annotations-all.csv'))
         
         # append dataset root to each path in the dataframe
         # tip: map(lambda x: x+1) means add 1 to each element in the column
