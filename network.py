@@ -279,13 +279,14 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
-                            #loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)                           
-                            #loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
-
                             if self.config['abstention'] == True:
-                                loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
-                            else:    
-                                loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
+                                loss_tab = self.abstention_loss.compute(ca_preds, target_AS)                           
+                                loss_vid = self.abstention_loss.compute(pred_AS, target_AS)
+
+                            #if self.config['abstention'] == True:
+                            #    loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
+                            #else:    
+                            #    loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
 
                             loss = 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 
@@ -436,7 +437,11 @@ class Network(object):
                     pred_AS, _, _, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
-                loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+
+                if self.config['abstention'] == True:
+                    loss = self.abstention_loss.compute(pred_AS, target_AS)
+                else:
+                    loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                 losses += [loss]
 
             # Contrastive Learning
@@ -533,7 +538,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight, _, embedding, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, att_weight, _, _, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info
@@ -567,9 +572,9 @@ class Network(object):
         if record_embeddings:
             embeddings = np.array(embeddings)
             print(embeddings.shape)
-            #num_batches, b, d = embeddings.shape
-            #print(num_batches, b, d)
-            #embeddings = np.reshape(embeddings, (num_batches*b, d))
+            num_batches, b, d = embeddings.shape
+            print(num_batches, b, d)
+            embeddings = np.reshape(embeddings, (num_batches, b*d))
             tsne_save_file =  os.path.join(self.log_dir, mode+"_tsne.html")
             plot_tsne_visualization(X=embeddings, y=as_label, info=fn, title=tsne_save_file , b = bicuspid)
 

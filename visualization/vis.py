@@ -25,14 +25,15 @@ def plot_tsne_visualization(X, y=None, info=None, title=None,b = None):
             df = pd.DataFrame({'x1':Xe[:,0], 'x2':Xe[:,1], 'info':info})
             fig = px.scatter(df, x='x1', y='x2', click_data=['info'])
     else:
+        color_mapping = {'0': '#1f78b4', '1': '#33a02c', '2': '#c51b8a', '3': '#fdbf6f'}
         if info is None:
-            fig = px.scatter(x=Xe[:,0], y=Xe[:,1], color=y)
+            fig = px.scatter(x=Xe[:,0], y=Xe[:,1], color=y, color_discrete_map=color_mapping)
         if b is not None:
             df = pd.DataFrame({'x1':Xe[:,0], 'x2':Xe[:,1], 'y':y, 'info':info,'bicuspid': b})
-            fig = px.scatter(df, x='x1', y='x2', color='y', hover_data=['info','bicuspid'])
+            fig = px.scatter(df, x='x1', y='x2', color='y', hover_data=['info','bicuspid'], color_discrete_map=color_mapping)
         else:
             df = pd.DataFrame({'x1':Xe[:,0], 'x2':Xe[:,1], 'y':y, 'info':info})
-            fig = px.scatter(df, x='x1', y='x2', color='y', hover_data=['info'])
+            fig = px.scatter(df, x='x1', y='x2', color='y', hover_data=['info'], color_discrete_map=color_mapping)
     if title is None:
         fig.write_html("tsne.html")
     else:
