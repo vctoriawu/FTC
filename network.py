@@ -278,15 +278,11 @@ class Network(object):
                             npair_loss = torch.mean(-torch.sum(self.pos_e*similarity_matrix,dim =2) + 
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
-                            
-                            if self.config['abstention'] == True:
-                                loss_tab = self.abstention_loss.compute(ca_preds, target_AS)                           
-                                loss_vid = self.abstention_loss.compute(pred_AS, target_AS)
 
-                            #if self.config['abstention'] == True:
-                            #    loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
-                            #else:    
-                            #    loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
+                            if self.config['abstention'] == True:
+                                loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
+                            else:    
+                                loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
 
                             loss = 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
                             losses += [loss] 

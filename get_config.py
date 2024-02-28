@@ -6,8 +6,8 @@ def get_config():
     config['use_wandb'] = True
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_abs"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_abs"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_4"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_4"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
@@ -41,7 +41,7 @@ def get_config():
     config['pretrained'] = False
     config['restore'] = True
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
-    config['abstention'] = True
+    config['abstention'] = False
 
     # Hyperparameters for training.
     config['batch_size'] = 16
