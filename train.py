@@ -30,6 +30,6 @@ if __name__ == "__main__":
         net.train(dataloader_ssl, dataloader_va)
         #net.test_comprehensive(dataloader_te, mode="test")
     if config['mode']=="test":
-        net.test_comprehensive(dataloader_validation, mode="test", record_embeddings=False)
+        net.test_comprehensive(dataloader_te, mode="test", record_embeddings=True)
     if config['use_wandb']:
         wandb.finish()

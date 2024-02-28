@@ -208,7 +208,7 @@ class FTC(nn.Module):
             nn.Linear(in_features=embedding_dim, out_features=embedding_dim//2, bias=True),
             nn.LayerNorm(embedding_dim//2),
             nn.LeakyReLU(negative_slope=0.05, inplace=True),
-            nn.Linear(in_features=embedding_dim//2, out_features=5, bias=True),
+            nn.Linear(in_features=embedding_dim//2, out_features=4, bias=True),
             # nn.Softmax(dim=2),
             # Reduce(),
             )

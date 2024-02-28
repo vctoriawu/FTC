@@ -533,7 +533,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight, _, _, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, att_weight, _, embedding, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info
@@ -549,7 +549,7 @@ class Network(object):
             pred_logits_arr.append(logits.cpu().numpy()[0])
             
             if record_embeddings:
-                embeddings += [embedding[0].squeeze().numpy()]
+                embeddings += [embedding[0].squeeze().cpu().numpy()]
 
                 
         # compile the information into a dictionary
@@ -566,9 +566,10 @@ class Network(object):
         df.to_csv(test_results_file)
         if record_embeddings:
             embeddings = np.array(embeddings)
-            num_batches, b, d = embeddings.shape
+            print(embeddings.shape)
+            #num_batches, b, d = embeddings.shape
             #print(num_batches, b, d)
-            embeddings = np.reshape(embeddings, (num_batches*b, d))
+            #embeddings = np.reshape(embeddings, (num_batches*b, d))
             tsne_save_file =  os.path.join(self.log_dir, mode+"_tsne.html")
             plot_tsne_visualization(X=embeddings, y=as_label, info=fn, title=tsne_save_file , b = bicuspid)
 
