@@ -314,6 +314,13 @@ def f1_from_confusion_matrix(mat):
     fn = mat[1,0] # it's actually + but we think it's -
     return tp / (tp + 0.5*fp + 0.5*fn)
 
+def balanced_f1_from_confusion_matrix(mat):
+    # get balanced F1 score from NxN confusion matrix
+    recalls = np.diag(mat) / np.sum(mat, axis=1)
+    precisions = np.diag(mat) / np.sum(mat, axis=0)
+    f1_scores = 2 * (precisions * recalls) / (precisions + recalls)
+    return np.nanmean(f1_scores)
+
 # visualizes the augmented as video data vs the original video data
 def visualize_as_video(augmented_video, orig_video, 
                        data_info=None, output_path=None):
