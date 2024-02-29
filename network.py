@@ -79,11 +79,12 @@ class Network(object):
         else:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'max', factor=0.5, 
-                                                                    patience=5, cooldown=2, min_lr=0.000001, verbose=True)
-        '''torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
                                                                     T_max=config['num_epochs'],
-                                                                    eta_min = 0.000001)'''
+                                                                    eta_min = 0.000001)
+        
+        '''torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'max', factor=0.5, 
+                                                                    patience=5, cooldown=2, min_lr=0.000001, verbose=True)'''
         
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']

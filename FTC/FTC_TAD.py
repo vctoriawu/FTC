@@ -230,7 +230,8 @@ class FTC(nn.Module):
 
         self.cross_attention = cross_attention
 
-        self.tab_embed = construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
+        self.tab_embed = nn.Sequential()
+        '''construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
                                                  loaded_dim, loaded_depth, loaded_heads, loaded_dim_head, loaded_dim_out,
                                                  loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
                                                  loaded_hidden_dim, loaded_classification,
@@ -239,7 +240,7 @@ class FTC(nn.Module):
         
         # Set requires_grad to False for all parameters
         for param in self.tab_embed.parameters():
-            param.requires_grad = False
+            param.requires_grad = False'''
 
         # Map video embeddings to video+tab embeddings
         self.map_embed = EmbeddingMappingFunction(embedding_dim, embedding_dim, embedding_dim)
