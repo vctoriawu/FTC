@@ -5,9 +5,9 @@ def get_config():
     config['mode'] = "train"
     config['use_wandb'] = True
     config['use_cuda'] = True
-    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_reduce_lr"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_reduce_lr"
+    config['log_dir'] = "/scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC/logs/"
+    config['model_load_dir'] = "/scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC/logs/coteaching_mlp"
+    config['best_model_dir'] = "/scratch/st-puranga-1/users/victoriawu/workspace/miccai2024/FTC/logs/coteaching_mlp"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
