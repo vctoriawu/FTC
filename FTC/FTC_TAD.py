@@ -208,7 +208,7 @@ class FTC(nn.Module):
             nn.Linear(in_features=embedding_dim, out_features=embedding_dim//2, bias=True),
             nn.LayerNorm(embedding_dim//2),
             nn.LeakyReLU(negative_slope=0.05, inplace=True),
-            nn.Linear(in_features=embedding_dim//2, out_features=5, bias=True),
+            nn.Linear(in_features=embedding_dim//2, out_features=4, bias=True),
             # nn.Softmax(dim=2),
             # Reduce(),
             )
@@ -336,8 +336,8 @@ class FTC(nn.Module):
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
             
             # Calculate the embeddings for CLIP loss
-            learned_joint_emb = (learned_joint_emb).sum(1)
-            ca_outputs = (ca_outputs).sum(1)
+            learned_joint_emb = (learned_joint_emb * att_weight).sum(1)
+            ca_outputs = (ca_outputs * ca_att_weight).sum(1)
 
         elif method == "attention_resbranch":
             # B x F x Emb => B x T x 4

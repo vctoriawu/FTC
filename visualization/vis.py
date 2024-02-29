@@ -17,7 +17,14 @@ def plot_tsne_visualization(X, y=None, info=None, title=None,b = None):
     # exepcts input X to be a NxD numpy array
     # expects y to be optional N array containing labels
     # expects info to be an optional N array containing string data
-    Xe = tsne(X, compress=False)
+
+    # Filter out elements where label is equal to 0
+    filtered_data = [(emb, lab, i, b) for emb, lab, i, b in zip(X, y, info, b) if lab != 'normal']
+
+    # Separate the filtered data back into individual lists
+    X, y, info, b = zip(*filtered_data)
+
+    Xe = tsne(np.array(X), compress=False)
     if y is None:
         if info is None:
             fig = px.scatter(x=Xe[:,0], y=Xe[:,1])
