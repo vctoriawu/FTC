@@ -230,7 +230,9 @@ class FTC(nn.Module):
 
         self.cross_attention = cross_attention
 
-        self.tab_embed = nn.Sequential()
+        self.tab_embed = nn.Sequential(
+            nn.Linear(36, self.tab_emb_dims[1]*self.tab_emb_dims[2])
+        )
         '''construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
                                                  loaded_dim, loaded_depth, loaded_heads, loaded_dim_head, loaded_dim_out,
                                                  loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
@@ -279,11 +281,16 @@ class FTC(nn.Module):
         #integrate tab data
         if split=='Train':
             if self.use_tab:
-                tab_x = torch.unsqueeze(tab_x, dim=-1) 
+                #tab_x = torch.unsqueeze(tab_x, dim=-1) 
                 
                 # B x F x 1
+                b, _ = tab_x.shape
+
                 #Tranform x feature values to higher dim using a shared mlp layer
-                _, tab_x = self.tab_embed(tab_x)
+                tab_x = self.tab_embed(tab_x).reshape(b, self.tab_emb_dims[1], self.tab_emb_dims[2])
+
+                #Tranform x feature values to higher dim using a shared mlp layer
+                #_, tab_x = self.tab_embed(tab_x)
 
                 #cross attention between video and tabular embeddings
                 ca_outputs = self.cross_attention(outputs, tab_x)
