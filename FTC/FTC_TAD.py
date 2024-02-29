@@ -187,28 +187,11 @@ class FTC(nn.Module):
         self.pos_embed = pos_embed
         self.transformer = transformer
 
-        # Get the parameters for the tabular model
-        loaded_categories = loaded_parameters['categories']
-        loaded_num_continuous = loaded_parameters['num_continuous']
-        loaded_dim = loaded_parameters['dim']
-        loaded_depth = loaded_parameters['depth']
-        loaded_heads = loaded_parameters['heads']
-        loaded_dim_head = loaded_parameters['dim_head']
-        loaded_dim_out = loaded_parameters['dim_out']
-        loaded_num_special_tokens = loaded_parameters['num_special_tokens']
-        loaded_attn_dropout = loaded_parameters['attn_dropout']
-        loaded_ff_dropout = loaded_parameters['ff_dropout']
-        loaded_hidden_dim = loaded_parameters['hidden_dim']
-        loaded_numerical_features = loaded_parameters['numerical_features']
-        loaded_classification = loaded_parameters['classification']
-        loaded_emb_type = loaded_parameters['emb_type']
-        loaded_numerical_bins = loaded_parameters['numerical_bins']
-
         self.aorticstenosispred = nn.Sequential(
             nn.Linear(in_features=embedding_dim, out_features=embedding_dim//2, bias=True),
             nn.LayerNorm(embedding_dim//2),
             nn.LeakyReLU(negative_slope=0.05, inplace=True),
-            nn.Linear(in_features=embedding_dim//2, out_features=5, bias=True),
+            nn.Linear(in_features=embedding_dim//2, out_features=4, bias=True),
             # nn.Softmax(dim=2),
             # Reduce(),
             )
@@ -230,16 +213,9 @@ class FTC(nn.Module):
 
         self.cross_attention = cross_attention
 
-        self.tab_embed = construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
-                                                 loaded_dim, loaded_depth, loaded_heads, loaded_dim_head, loaded_dim_out,
-                                                 loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
-                                                 loaded_hidden_dim, loaded_classification,
-                                                 loaded_numerical_bins, loaded_emb_type)
-        self.tab_embed.load_state_dict(torch.load('../as_transformer.pth'))
-        
-        # Set requires_grad to False for all parameters
-        for param in self.tab_embed.parameters():
-            param.requires_grad = False
+        self.tab_embed = nn.Sequential(
+            nn.Linear(36, self.tab_emb_dims[1]*self.tab_emb_dims[2])
+        )
 
         # Map video embeddings to video+tab embeddings
         self.map_embed = EmbeddingMappingFunction(embedding_dim, embedding_dim, embedding_dim)
@@ -278,11 +254,11 @@ class FTC(nn.Module):
         #integrate tab data
         if split=='Train':
             if self.use_tab:
-                tab_x = torch.unsqueeze(tab_x, dim=-1) 
-                
                 # B x F x 1
+                b, _ = tab_x.shape
+
                 #Tranform x feature values to higher dim using a shared mlp layer
-                _, tab_x = self.tab_embed(tab_x)
+                tab_x = self.tab_embed(tab_x).reshape(b, self.tab_emb_dims[1], self.tab_emb_dims[2])
 
                 #cross attention between video and tabular embeddings
                 ca_outputs = self.cross_attention(outputs, tab_x)
