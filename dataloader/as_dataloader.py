@@ -22,9 +22,9 @@ seed(42)
 torch.random.manual_seed(42)
 np.random.seed(42)
 
-img_path_dataset = '/workspace/data/as_tom/annotations-all.csv'
-tab_path_dataset = '/workspace/data/finetune/finetuned_df.csv'
-dataset_root = r"/workspace/data/as_tom"
+img_path_dataset = '/arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom/annotations-all.csv'
+tab_path_dataset = '/arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom/finetuned_df.csv'
+dataset_root = r"/arc/project/st-puranga-1/datasets/aortic_stenosis_new/as_tom"
 cine_loader = 'mat_loader'
 
 # filter out pytorch user warnings for upsampling behaviour
