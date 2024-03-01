@@ -79,11 +79,9 @@ class Network(object):
         else:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'max', factor=0.5, 
-                                                                    patience=5, cooldown=2, min_lr=0.000001, verbose=True)
-        '''torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
                                                                     T_max=config['num_epochs'],
-                                                                    eta_min = 0.000001)'''
+                                                                    eta_min = 0.000001)
         
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
@@ -338,15 +336,15 @@ class Network(object):
             #acc_AS, f1_B, val_loss = self.test(loader_va, mode="val")
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':
                 ## Validation Data Evaluation 
-                acc_AS, val_loss, val_f1 = self.test(loader_va, mode="val")
+                acc_AS, val_loss = self.test(loader_va, mode="val")
                 if self.config['use_wandb']:
-                    wandb.log({"tr_loss":loss_avg, "val_loss":val_loss, "val_AS_acc":acc_AS, "val_f1": val_f1})
+                    wandb.log({"tr_loss":loss_avg, "val_loss":val_loss, "val_AS_acc":acc_AS})
                     # wandb.log({"tr_loss_AS":loss_avg_AS, "tr_loss_B":loss_avg_B, "tr_loss":loss_avg,
                     #            "val_loss":val_loss, "val_B_f1":f1_B, "val_AS_acc":acc_AS})
                 ## Test Data Evaluation    
-                acc_AS_te, te_loss, te_f1 = self.test(loader_te, mode="val")
+                acc_AS_te, te_loss = self.test(loader_te, mode="val")
                 if self.config['use_wandb']:
-                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te, "test_f1": te_f1})
+                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})
 
                 # Save model every epoch.
                 self._save(self.checkpts_file)
@@ -397,7 +395,7 @@ class Network(object):
                
             
             # modify the learning rate
-            self.scheduler.step(val_f1)   
+            self.scheduler.step(val_loss)   
 
     @torch.no_grad()
     def test(self, loader_te, mode="test"):
@@ -482,12 +480,11 @@ class Network(object):
             gt = [x for xs in gt for x in xs]
             acc_AS = balanced_accuracy_score(gt, preds) #utils.balanced_acc_from_confusion_matrix(conf_AS)
             print(conf_AS)
-
-            f1_B = utils.balanced_f1_from_confusion_matrix(conf_AS)
+            #f1_B = utils.f1_from_confusion_matrix(conf_B)
 
             # Switch the model into training mode
             self.model.train()
-            return acc_AS, loss_avg, f1_B
+            return acc_AS, loss_avg
         else:
             loss_avg = torch.mean(torch.stack(losses)).item()
             self.model.train()
