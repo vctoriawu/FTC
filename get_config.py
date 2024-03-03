@@ -5,9 +5,12 @@ def get_config():
     config['mode'] = "train"
     config['use_wandb'] = True
     config['use_cuda'] = True
+    config['num_workers'] = 8
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_1d"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_1d"
+    config['model_load_dir'] = "FTC_image_tmed" 
+    #"/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_1d"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/FTC_image_tmed" 
+    #"/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_1d"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
@@ -37,13 +40,13 @@ def get_config():
     config['temp'] = 0.1
 
     # Hyperparameters for models.
-    config['model'] = "FTC_TAD" # r2plus1d_18/x3d/resnet50/slowfast/tvn/FTC
+    config['model'] = "FTC_image_tmed" # r2plus1d_18/x3d/resnet50/slowfast/tvn/FTC/FTC_image_tmed
     config['pretrained'] = False
     config['restore'] = True
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
 
     # Hyperparameters for training.
-    config['batch_size'] = 16
+    config['batch_size'] = 2
     config['num_epochs'] = 50 #110
     config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'AS' # imbalanced sampling based on AS/bicuspid/random

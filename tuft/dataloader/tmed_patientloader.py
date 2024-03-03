@@ -27,7 +27,7 @@ Performs data augmentation transforms
 '''
 
 
-DATA_ROOT = "/AS_clean/TMED/approved_users_only/"
+DATA_ROOT = "/workspace/TMED/approved_users_only/"
 CSV_NAME = 'DEV479/TMED2_fold0_labeledpart.csv'
 # SOCKEYE: DATA_ROOT = TBD
 # LOCAL: DATA_ROOT = "D:\\Datasets\\TMED\\approved_users_only"
@@ -136,9 +136,9 @@ def get_as_dataloader(config, split, mode,start=8,finish=16):
         #     loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B)
         # else: # random sampling
         #     loader = DataLoader(dset, batch_size=bsize, shuffle=True)
-        loader = DataLoader(dset, batch_size=bsize, shuffle=True)
+        loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=config['num_workers'])
     else:
-        loader = DataLoader(dset, batch_size=bsize, shuffle=False)
+        loader = DataLoader(dset, batch_size=bsize, shuffle=False, num_workers=config['num_workers'])
     return loader
 
 # TODO get a searchable version of the dataset with all splits for running quick visualizations
@@ -316,8 +316,10 @@ class TMEDDataset(Dataset):
             y_view.append(torch.tensor(self.scheme_view[data_info['view_label']]))
             y_AS.append(torch.tensor(self.scheme[data_info['diagnosis_label']]))
         images = torch.stack(images)
+        # [F, C, H, W] => [C, F, H, W] 
+        images = images.permute(1, 0, 2, 3)
         y_view = torch.stack(y_view)
-        ret = {'x':images, 'y_AS':y_AS[0], 'y_view':y_view}
+        ret = {'x':images, 'y_AS':y_AS[0], 'y_view':y_view, 'p_id': p_id}
         
         return ret
         

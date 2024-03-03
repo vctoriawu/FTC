@@ -15,16 +15,17 @@ import warnings
 from random import lognormvariate
 from random import seed
 import torch.nn as nn
+import torch.nn.functional as F
 import random
 from dataloader.utils import load_as_data, preprocess_as_data, fix_leakage
 
-seed(42)
-torch.random.manual_seed(42)
-np.random.seed(42)
+# seed(42)
+# torch.random.manual_seed(42)
+# np.random.seed(42)
 
-img_path_dataset = '/workspace/data/as_tom/annotations-all.csv'
-tab_path_dataset = '/workspace/data/finetune/finetuned_df.csv'
-dataset_root = r"/workspace/data/as_tom"
+img_path_dataset = '/workspace/as_tom_annotations-all.csv'
+tab_path_dataset = '/workspace/finetuned_df.csv'
+dataset_root = r"/workspace/as_tom"
 cine_loader = 'mat_loader'
 
 # filter out pytorch user warnings for upsampling behaviour
@@ -176,14 +177,14 @@ def get_as_dataloader(config, split, mode):
     if mode=='train':
         if config['sampler'] == 'AS':
             sampler_AS, _ = dset.class_samplers()
-            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_AS, num_workers=6)
+            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_AS, num_workers=config['num_workers'])
         elif config['sampler'] == 'bicuspid':
             _ , sampler_B = dset.class_samplers()
-            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B, num_workers=6)
+            loader = DataLoader(dset, batch_size=bsize, sampler=sampler_B, num_workers=config['num_workers'])
         else: # random sampling
-            loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=6)
+            loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=config['num_workers'])
     else:
-        loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=6)
+        loader = DataLoader(dset, batch_size=bsize, shuffle=True, num_workers=config['num_workers'])
     return loader
     
 
@@ -294,6 +295,13 @@ class AorticStenosisDataset(Dataset):
 
         #get associated tabular data based on echo ID
         study_num = data_info['Echo ID#']
+        if data_info['view']=='plax':
+            view = torch.tensor(0)
+        elif data_info['view']=='psax':
+            view = torch.tensor(1)
+        else:
+            print(f"Dataset includes a view that is not Plax/Psax: {data_info['View']}")
+
         tab_info = self.tab_dataset.loc[int(study_num)]
         tab_info = torch.tensor(tab_info.values, dtype=torch.float32)
 
@@ -302,14 +310,14 @@ class AorticStenosisDataset(Dataset):
         #if raw_dataset comes from all_cines in nas drive...
         folder = 'round2'
         if folder == 'all_cines':
-            cine_original = cine_original.transpose((2,0,1))
+            cine_original = cine_original.transpose((2,0,1)) 
         elif folder == 'round2':
             pass
             
         window_length = 60000 / (lognormvariate(self.hr_mean, self.hr_srd) * data_info['frame_time'])
         cine = self.get_random_interval(cine_original, window_length)
         #print(cine.shape)
-        cine = resize(cine, (32, *self.resolution))
+        cine = resize(cine, (32, *self.resolution)) 
         cine = torch.tensor(cine).unsqueeze(0)
         
         # storing labels as a dictionary will be in a future update
@@ -347,15 +355,15 @@ class AorticStenosisDataset(Dataset):
         # slowFast input transformation
         #cine = self.pack_transform(cine)
         if (self.contrstive == 'SupCon' or self.contrstive =='SimCLR') and (self.split == 'train' or self.split =='train_all'):
-            ret = ([cine,cine_aug], tab_info, labels_AS, labels_B)
+            ret = ([cine,cine_aug], tab_info, labels_AS, labels_B, view)
        
         else:
-            ret = (cine, tab_info, labels_AS, labels_B)
-        if self.return_info:
+            ret = (cine, tab_info, labels_AS, labels_B, view)
+        if self.return_info: #Off during training
             di = data_info.to_dict()
             di['window_length'] = window_length
             di['original_length'] = cine_original.shape[1]
-            ret = (cine, tab_info, labels_AS, labels_B, di, cine_original)
+            ret = (cine, tab_info, labels_AS, labels_B, di, cine_original, view)
 
         return ret
 

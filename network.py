@@ -73,6 +73,8 @@ class Network(object):
                 self.model = torch.nn.DataParallel(self.model)
             self.model.cuda()
         self.num_classes_AS = config['num_classes']
+        self.num_classes_view = 2
+        self.lamda = 0.3
         if config['cotrastive_method']=='Linear':
             self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=config['lr'])
             
@@ -109,13 +111,13 @@ class Network(object):
         self._init_aux()
 
         # loss for the embedding space
-        self.embed_loss_cos = CLIPLoss(config['clip_temp'], config['clip_lambda'])
+        #self.embed_loss_cos = CLIPLoss(config['clip_temp'], config['clip_lambda'])
 
-        self.clip_emb_loss = config["clip_emb_loss"]
-        self.vid_loss = config["vid_loss"]
-        self.vid_tab_loss = config["vid_tab_loss"]
-        self.entropy_attention_loss = config["entropy_attention_loss"]
-        self.n_pair_loss = config["n_pair_loss"]
+        #self.clip_emb_loss = config["clip_emb_loss"]
+        # self.vid_loss = config["vid_loss"]
+        # self.vid_tab_loss = config["vid_tab_loss"]
+        # self.entropy_attention_loss = config["entropy_attention_loss"]
+        # self.n_pair_loss = config["n_pair_loss"]
 
         # self._restore('../checkpoint.pth')
 
@@ -272,6 +274,7 @@ class Network(object):
                     tab_data = data[1]
                     target_AS = data[2]
                     target_B = data[3]
+                    target_view = data[4]
 
                     # Cross Entropy Training
                     if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == "Linear":
@@ -284,7 +287,20 @@ class Network(object):
                             tab_data = tab_data.cuda()
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
-                        if self.config['model'] == "FTC_TAD":
+                            target_view = target_view.cuda() 
+
+                        if self.config['model'] == "FTC_image_tmed":
+                            #IMAGE ONLY; NO TABULAR INPUT
+                            pred_view, pred_AS = self.model(cine) # cine => BxCxFxHxW
+
+                            loss_AS = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+                            loss_view = self._get_loss(pred_view, target_view, self.num_classes_view)
+
+                            loss = loss_AS + self.lamda * loss_view
+                            losses += [loss]
+                            
+                        elif self.config['model'] == "FTC_TAD":
+                            #MULTIMODAL
                             pred_AS,entropy_attention,outputs, _, ca_preds, learned_emb, ca_embed = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
@@ -308,27 +324,27 @@ class Network(object):
                             pred_AS = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                             losses += [loss]
-                    # Contrastive Learning
-                    else:
-                        cines = torch.cat([cine[0], cine[1]], dim=0)
-                        if self.config['use_cuda']:
-                            cines = cines.cuda()
-                            tab_data = tab_data.cuda()
-                            target_AS = target_AS.cuda()
-                            target_B = target_B.cuda()
-                        bsz = target_AS.shape[0]
-                        features = self.model(cines, tab_data, split='Train') # Bx3xTxHxW
-                        f1, f2 = torch.split(features, [bsz, bsz], dim=0)
-                        features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-                        if self.config['cotrastive_method'] == 'SupCon':
-                            loss = self._get_loss(features, target_AS, self.num_classes_AS)
-                        elif self.config['cotrastive_method'] == 'SimCLR':
-                            loss = self._get_loss(features, target_AS, self.num_classes_AS)
-                        else:
-                            raise ValueError('contrastive method not supported: {}'.
-                                             format(self.config['cotrastive_method']))
+                    # # Contrastive Learning
+                    # else:
+                    #     cines = torch.cat([cine[0], cine[1]], dim=0)
+                    #     if self.config['use_cuda']:
+                    #         cines = cines.cuda()
+                    #         tab_data = tab_data.cuda()
+                    #         target_AS = target_AS.cuda()
+                    #         target_B = target_B.cuda()
+                    #     bsz = target_AS.shape[0]
+                    #     features = self.model(cines, tab_data, split='Train') # Bx3xTxHxW
+                    #     f1, f2 = torch.split(features, [bsz, bsz], dim=0)
+                    #     features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+                    #     if self.config['cotrastive_method'] == 'SupCon':
+                    #         loss = self._get_loss(features, target_AS, self.num_classes_AS)
+                    #     elif self.config['cotrastive_method'] == 'SimCLR':
+                    #         loss = self._get_loss(features, target_AS, self.num_classes_AS)
+                    #     else:
+                    #         raise ValueError('contrastive method not supported: {}'.
+                    #                          format(self.config['cotrastive_method']))
 
-                        losses += [loss]
+                    #     losses += [loss]
                         
                     # Calculate the gradient.
                     # grad_loss = loss / gradient_accumulation_steps
@@ -359,7 +375,7 @@ class Network(object):
                     wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})
 
                 # Save model every epoch.
-                self._save(self.checkpts_file)
+                self._save(self.checkpts_file) #TODO - check
 
                 # Early stopping strategy.
                 if acc_AS > best_va_acc:
@@ -381,29 +397,29 @@ class Network(object):
                 self.valid_oas += [acc_AS]
                 self.idx_steps += [epoch]
                 
-            elif self.config['cotrastive_method'] == 'SupCon' or self.config['cotrastive_method'] == 'SimCLR':
-                if epoch%5==0:
-                    val_acc = validation_constructive(self.model,self.config)
-                    if self.config['use_wandb']:
-                        wandb.log({"AMI":val_acc['AMI'],"NMI":val_acc['NMI'],
-                                   "precision_at_1":val_acc['precision_at_1']})
-                if (val_acc['precision_at_1'] > best_va_acc_supcon and self.config['cotrastive_method'] == 'SupCon'):
-                    # Save model with the best accuracy on validation set.
-                    best_va_acc_supcon = val_acc['precision_at_1']
-                    self._save(self.bestmodel_file_contrastive)
-                    print('Model Saved')
+            # elif self.config['cotrastive_method'] == 'SupCon' or self.config['cotrastive_method'] == 'SimCLR':
+            #     if epoch%5==0:
+            #         val_acc = validation_constructive(self.model,self.config)
+            #         if self.config['use_wandb']:
+            #             wandb.log({"AMI":val_acc['AMI'],"NMI":val_acc['NMI'],
+            #                        "precision_at_1":val_acc['precision_at_1']})
+            #     if (val_acc['precision_at_1'] > best_va_acc_supcon and self.config['cotrastive_method'] == 'SupCon'):
+            #         # Save model with the best accuracy on validation set.
+            #         best_va_acc_supcon = val_acc['precision_at_1']
+            #         self._save(self.bestmodel_file_contrastive)
+            #         print('Model Saved')
                 
-                if self.config['cotrastive_method'] == 'SimCLR':
-                    self._save(self.bestmodel_file_contrastive)
-                    print('Model Saved')
+            #     if self.config['cotrastive_method'] == 'SimCLR':
+            #         self._save(self.bestmodel_file_contrastive)
+            #         print('Model Saved')
                     
-                if self.config['use_wandb']:
-                    wandb.log({"contrastive_loss":loss_avg})
+            #     if self.config['use_wandb']:
+            #         wandb.log({"contrastive_loss":loss_avg})
                     
-                print(
-                    "Epoch: %3d, loss: %.5f,precision_at_1: %.5f"
-                    % (epoch, loss_avg,val_acc['precision_at_1'])
-                ) 
+            #     print(
+            #         "Epoch: %3d, loss: %.5f,precision_at_1: %.5f"
+            #         % (epoch, loss_avg,val_acc['precision_at_1'])
+            #     ) 
                
             
             # modify the learning rate
@@ -436,6 +452,7 @@ class Network(object):
             tab_data = data[1]
             target_AS = data[2]
             target_B = data[3]
+            target_view = data[4]
             # Transfer data from CPU to GPU.
             # Cross Entropy Training
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == "Linear":
@@ -448,34 +465,40 @@ class Network(object):
                     tab_data = tab_data.cuda()
                     target_AS = target_AS.cuda()
                     target_B = target_B.cuda()
-                    
-                if self.config['model'] == "FTC_TAD":
+                    target_view = target_view.cuda()
+                if self.config['model'] == "FTC_image_tmed":
+                    pred_view , pred_AS = self.model(cine)
+                    loss_AS = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+                    loss_view = self._get_loss(pred_view, target_view, self.num_classes_view)
+                    loss = loss_AS + self.lamda * loss_view
+                elif self.config['model'] == "FTC_TAD":
                     pred_AS, _, _, _, _, learned_emb, ca_embed = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
-                loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+                    loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                 losses += [loss]
 
-            # Contrastive Learning
-            else:
-                cines = torch.cat([cine[0], cine[1]], dim=0)
-                if self.config['use_cuda']:
-                    cines = cines.cuda()
-                    tab_data = tab_data.cuda()
-                    target_AS = target_AS.cuda()
-                    target_B = target_B.cuda()
-                bsz = target_AS.shape[0]
-                features = self.model(cines) # Bx3xTxHxW
-                f1, f2 = torch.split(features, [bsz, bsz], dim=0)
-                features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-                if self.config['cotrastive_method'] == 'SupCon':
-                    loss = self._get_loss(features, target_AS, self.num_classes_AS)
-                elif self.config['cotrastive_method'] == 'SimCLR':
-                    loss = self._get_loss(features, target_AS, self.num_classes_AS)
-                else:
-                    raise ValueError('contrastive method not supported: {}'.
-                                     format(self.config['cotrastive_method']))
-                losses += [loss]
+            ## Contrastive Learning
+            # else:
+            #     cines = torch.cat([cine[0], cine[1]], dim=0)
+            #     if self.config['use_cuda']:
+            #         cines = cines.cuda()
+            #         tab_data = tab_data.cuda()
+            #         target_AS = target_AS.cuda()
+            #         target_B = target_B.cuda()
+            #     bsz = target_AS.shape[0]
+            #     features = self.model(cines) # Bx3xTxHxW
+            #     f1, f2 = torch.split(features, [bsz, bsz], dim=0)
+            #     features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+            #     if self.config['cotrastive_method'] == 'SupCon':
+            #         loss = self._get_loss(features, target_AS, self.num_classes_AS)
+            #     elif self.config['cotrastive_method'] == 'SimCLR':
+            #         loss = self._get_loss(features, target_AS, self.num_classes_AS)
+            #     else:
+            #         raise ValueError('contrastive method not supported: {}'.
+            #                          format(self.config['cotrastive_method']))
+            #     losses += [loss]
             
             #argmax_pred_AS = torch.argmax(pred_AS, dim=1)
             #argmax_pred_B = torch.argmax(pred_B, dim=1)
@@ -520,7 +543,7 @@ class Network(object):
         predicted_qual = []
         embeddings = []
         
-        for cine, tab_info, target_AS, target_B, data_info, cine_orig in tqdm(loader):
+        for cine, tab_info, target_AS, target_B, data_info, cine_orig, _ in tqdm(loader):
             # collect the label info
             target_AS_arr.append(int(target_AS[0]))
             target_B_arr.append(int(target_B[0]))
@@ -546,7 +569,9 @@ class Network(object):
             
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
-            if self.config['model'] == "FTC_TAD":
+            if self.config['model'] == "FTC_image_tmed":
+                _, pred_AS = self.model(cine)
+            elif self.config['model'] == "FTC_TAD":
                 pred_AS,entropy_attention,outputs, att_weight, _, _, _ = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW

@@ -5,6 +5,7 @@ from torchsummary import summary
 #from FTC.FTC import get_model_b
 from FTC.FTC_resnet18 import get_model_res18
 from FTC.FTC_TAD import get_model_tad
+from FTC.FTC_image_tmed import wrn_video
 #from ResNetAE.ResNetAE import ResNetAE
 import torch
 #from pytorchvideo.models import x3d, resnet, slowfast
@@ -153,7 +154,17 @@ def get_model(config):
         nc = 2
     else:
         nc = config['num_classes']
+
     if config['cotrastive_method'] == "CE":
+
+        if config['model'] == "FTC_image_tmed":
+            model = wrn_video(num_classes_diagnosis=nc,num_classes_view=2)
+            print("Using FTC_image_tmed model")
+            # Read checkpoint file.
+            #load_res = torch.load('/AS_clean/tuft_fs/logs/wrn_att/best_model.pth') 
+            # Loading model.
+            #model.load_state_dict(load_res["model"])
+            #print(f"Checkpoint model loaded.")
         if config['model'] == "r2plus1d_18":
             # instantiate the pretrained model
             model = r2plus1d_18(pretrained=config['pretrained'], num_classes=nc)

@@ -31,6 +31,8 @@ class wrn(nn.Module):
 class wrn_video(nn.Module):
     def __init__(self, num_classes_diagnosis, num_classes_view):
         super(wrn_video, self).__init__()
+        self.num_classes_diagnosis = num_classes_diagnosis
+
         self.model = models.wide_resnet50_2(pretrained=True)
         # new layer
         self.relu = nn.ReLU(inplace=True)
@@ -38,8 +40,10 @@ class wrn_video(nn.Module):
         self.fc_diagnosis = nn.Linear(1000, num_classes_diagnosis)
         self.attention = nn.Linear(1000, 1)
 
-    def forward(self, x):
-        
+    def forward(self, x):        
+        # [B, C, F, H, W] -> [B, F, C, H, W]
+        x = x.permute(0,2,1,3,4)
+
         nB, nF, nC, nH, nW = x.shape
         
         # Merge batch and frames dimension
@@ -48,31 +52,36 @@ class wrn_video(nn.Module):
         out = self.relu(self.model(x))
         out = out.view(-1, nF, 1000)
         pred_view = self.fc_view(out)
-        pred_as = self.fc_diagnosis(out)
+        pred_as = self.fc_diagnosis(out) #[B, F, 4]
         att = self.attention(out)
         
         # View Analysis
         view_prob = torch.nn.functional.softmax(pred_view,dim=2)
-        relevance = torch.cumsum(view_prob,dim=2)[:,:,1]
-        #print(relevance)
-        relevance  = relevance.unsqueeze(2).repeat(1,1,3)
-        
+        relevance = torch.cumsum(view_prob,dim=2)[:,:,1] #[B, 32]
+        relevance  = relevance.unsqueeze(2).repeat(1,1,self.num_classes_diagnosis) #[B, 32, 1] -> [B, 32, 4]
+
         # attention weights B x F x 1
-        att_weight = nn.functional.softmax(att, dim=1)
+        att_weight = nn.functional.softmax(att, dim=1) 
         # B x T x 4   =>  B x 4
-        as_prediction = ((relevance*pred_as) * att_weight).sum(1)
-            
+        as_prediction = ((relevance*pred_as) * att_weight).sum(1, keepdim=False)
+
+        #B x T x 2 => B x 2
+        pred_view = torch.mean(pred_view, dim=1)
+        
         return pred_view , as_prediction
 
         
 def get_model(config):
-    nc_diagnosis = config['num_classes_diagnosis'] = 3
-    nc_view = config['num_classes_view'] = 3
+    nc_diagnosis = config['num_classes_diagnosis']
+    nc_view = config['num_classes_view'] 
     if config['model'] == "wideresnet":
         # wrn_builder = build_WideResNet()
         # model = wrn_builder.build(nc_diagnosis,nc_view)
         model = wrn(nc_diagnosis,nc_view)
-        
+    
+    if config['model'] == "FTC_image_tmed":
+        model = wrn_video(num_classes_diagnosis=nc_diagnosis,num_classes_view=nc_view)
+        print("Using FTC_image_tmed model")
                 
     if config['model'] == "FTC_res18":
         model = wrn_video(nc_diagnosis,nc_view)

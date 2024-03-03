@@ -5,21 +5,24 @@ def get_config():
     config['mode'] = "train"
     config['use_wandb'] = False
     config['use_cuda'] = True
+    config['num_workers'] = 8
     config['log_dir'] = "/AS_clean/tuft_fs/logs"
-    config['model_load_dir'] = None # required for test-only mode
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
+    config['model_load_dir'] = "FTC_image_tmed" 
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/FTC_image_tmed" 
 
     # Hyperparameters for dataset. 
-    config['view'] = 'all' # all/plax/psax
+    config['view'] = 'plaxpsax' # all/plax/psax
     config['flip_rate'] = 0.3
     config['label_scheme_name'] = 'mod_severe'
     config['view_scheme_name'] = 'three_class'
     # must be compatible with number of unique values in label scheme
     # will be automatic in future update
-    config['num_classes_diagnosis'] = 3
-    config['num_classes_view'] = 3
+    config['num_classes_diagnosis'] = 4
+    config['num_classes_view'] = 2
 
     # Hyperparameters for models.
-    config['model'] = "FTC_res18" # wideresnet
+    config['model'] = "FTC_image_tmed" # wideresnet
     config['pretrained'] = False
     config['restore'] = False
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR

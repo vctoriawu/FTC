@@ -95,7 +95,7 @@ class Network(object):
 
         # We save model that achieves the best performance: early stopping strategy.
         self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
-        self.bestmodel_file_load = Path('/AS_clean/tuft_fs/logs/wrn-50-2/best_model.pth')
+        self.bestmodel_file_load = os.path.join(self.config['best_model_dir'], "best_model.pth")
         
         # For test, we also save the results dataframe
         self.test_results_file = os.path.join(self.log_dir, "best_model.pth")
@@ -316,15 +316,17 @@ class Network(object):
         # Choose which model to evaluate.
         if mode=="test":
             self._restore(self.bestmodel_file_load)
+            print(f"Loading from {self.bestmodel_file_load}.")
         # Switch the model into eval mode.
         self.model.eval()
         patient, view, as_label = [], [], []
         target_AS_arr, pred_AS_arr = [], []
-        normal, mild, moderate, severe = [], [], [], []
+        #normal, mild, moderate, severe = [], [], [], []
+        pred_logits_arr = []
         target_view_arr, pred_view_arr = [], []
         max_AS_arr, entropy_AS_arr, vacuity_AS_arr, uni_AS_arr = [], [], [], []
-        max_view_arr, entropy_view_arr, vacuity_view_arr, uni_view_arr = [], [], [], []
-        relevance_weight = []
+        #max_view_arr, entropy_view_arr, vacuity_view_arr, uni_view_arr = [], [], [], []
+        #relevance_weight = []
         
         
         for data in tqdm(loader):
@@ -349,35 +351,37 @@ class Network(object):
             # get the model prediction
             pred_view ,pred_AS = self.model(cine) # Bx3xTxHxW
 
-            argm_view, max_p_view, prob_view,ent_view, vac_view, uni_view = self._get_prediction_stats(pred_view, self.num_classes_view)
-            view_relevance_weight = prob_view[0][0]+prob_view[0][1]
+            #argm_view, max_p_view, prob_view,ent_view, vac_view, uni_view = self._get_prediction_stats(pred_view, self.num_classes_view)
+            #view_relevance_weight = prob_view[0][0]+prob_view[0][1]
             
             argm_AS, max_p_AS, prob_AS,ent_AS, vac_AS, uni_AS = self._get_prediction_stats(pred_AS, self.num_classes_AS)
             pred_AS_arr.append(argm_AS.cpu().numpy()[0])
-            normal.append(prob_AS[0][0].cpu().numpy())
-            mild.append(prob_AS[0][1].cpu().numpy())
-            moderate.append(prob_AS[0][2].cpu().numpy())
+            #normal.append(prob_AS[0][0].cpu().numpy())
+            #mild.append(prob_AS[0][1].cpu().numpy())
+            #moderate.append(prob_AS[0][2].cpu().numpy())
             #severe.append(prob_AS[0][3].cpu().numpy())
             max_AS_arr.append(max_p_AS.cpu().numpy()[0])
             entropy_AS_arr.append(ent_AS.cpu().numpy()[0])
-            pred_view_arr.append(argm_view.cpu().numpy()[0])
-            max_view_arr.append(max_p_view.cpu().numpy()[0])
-            entropy_view_arr.append(ent_view.cpu().numpy()[0])
-            relevance_weight.append(view_relevance_weight.cpu().numpy())
+            #pred_view_arr.append(argm_view.cpu().numpy()[0])
+            #max_view_arr.append(max_p_view.cpu().numpy()[0])
+            #entropy_view_arr.append(ent_view.cpu().numpy()[0])
+            #relevance_weight.append(view_relevance_weight.cpu().numpy())
+            pred_logits_arr.append(prob_AS.cpu().numpy()[0])
         
                 
         # compile the information into a dictionary
-        d = {'id':patient, 'view':view, 'as':as_label, 
+        d = {'echo_id':patient, 'view':view, 'GT_AS':as_label, 
              'pred_AS':pred_AS_arr, 'max_AS':max_AS_arr,
-             'ent_AS':entropy_AS_arr, 'pred_view':pred_view_arr, 'max_AS':max_view_arr,
-             'ent_AS':entropy_view_arr,'ent_view':entropy_view_arr,'relevance_weight':relevance_weight,
-             'normal': normal,'mild': mild, 'moderate': moderate, #'severe':severe
+             'ent_AS':entropy_AS_arr, 
+             #'pred_view':pred_view_arr, 'max_AS':max_view_arr,
+             #'ent_AS':entropy_view_arr,'ent_view':entropy_view_arr,'relevance_weight':relevance_weight,
+             #'normal': normal,'mild': mild, 'moderate': moderate, #'severe':severe
+             'pred_logits_AS': pred_logits_arr
              }
         df = pd.DataFrame(data=d)
         # save the dataframe
-        test_results_file = os.path.join(self.log_dir, mode+".csv")
+        test_results_file = os.path.join(self.best_model_dir, "tmed_"+ mode+".csv")
         df.to_csv(test_results_file)
-
 
 # if __name__ == "__main__":
 #     """Main for mock testing."""
