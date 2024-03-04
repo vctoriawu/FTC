@@ -295,12 +295,10 @@ class FTC(nn.Module):
 
                 if self.multimodal == "fttrans":
                     tab_x = torch.unsqueeze(tab_x, dim=-1) 
-                    print(tab_x.shape)
                     
                     # B x F x 1
                     #Tranform x feature values to higher dim using a shared mlp layer
                     _, tab_x = self.tab_embed(tab_x)
-                    print(tab_x.shape)
                     #cross attention between video and tabular embeddings
                     ca_outputs = self.cross_attention(outputs, tab_x)
                 elif self.multimodal == "mlp":

@@ -294,6 +294,14 @@ class AorticStenosisDataset(Dataset):
 
         #get associated tabular data based on echo ID
         study_num = data_info['Echo ID#']
+
+        if data_info['view']=='plax':
+            view = torch.tensor(0)
+        elif data_info['view']=='psax':
+            view = torch.tensor(1)
+        else:
+            print(f"Dataset includes a view that is not Plax/Psax: {data_info['View']}")
+
         tab_info = self.tab_dataset.loc[int(study_num)]
         tab_info = torch.tensor(tab_info.values, dtype=torch.float32)
 
@@ -347,15 +355,15 @@ class AorticStenosisDataset(Dataset):
         # slowFast input transformation
         #cine = self.pack_transform(cine)
         if (self.contrstive == 'SupCon' or self.contrstive =='SimCLR') and (self.split == 'train' or self.split =='train_all'):
-            ret = ([cine,cine_aug], tab_info, labels_AS, labels_B)
+            ret = ([cine,cine_aug], tab_info, labels_AS, labels_B, view)
        
         else:
-            ret = (cine, tab_info, labels_AS, labels_B)
-        if self.return_info:
+            ret = (cine, tab_info, labels_AS, labels_B, view)
+        if self.return_info: # Off during training
             di = data_info.to_dict()
             di['window_length'] = window_length
             di['original_length'] = cine_original.shape[1]
-            ret = (cine, tab_info, labels_AS, labels_B, di, cine_original)
+            ret = (cine, tab_info, labels_AS, labels_B, di, cine_original, view)
 
         return ret
 
