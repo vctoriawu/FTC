@@ -2,12 +2,12 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
-    config['mode'] = "test"
+    config['mode'] = "train"
     config['use_wandb'] = False
     config['use_cuda'] = True
-    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_3"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching_3"
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_test"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_test"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
@@ -42,6 +42,8 @@ def get_config():
     config['restore'] = True
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
     config['abstention'] = False
+    config["coteaching"] = False
+    config['multimodal'] = "fttrans" # clip/mlp/fttrans
 
     # Hyperparameters for training.
     config['batch_size'] = 16

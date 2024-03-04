@@ -12,7 +12,7 @@ if __name__ == "__main__":
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4_class_coteaching_4')
+        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4_class_no_coteaching_2')
     
     model = get_model(config)
     net = Network(model, config)
@@ -30,6 +30,6 @@ if __name__ == "__main__":
         net.train(dataloader_ssl, dataloader_va)
         #net.test_comprehensive(dataloader_te, mode="test")
     if config['mode']=="test":
-        net.test_comprehensive(dataloader_te, mode="test", record_embeddings=True)
+        net.test_comprehensive(dataloader_te, mode="test", record_embeddings=False)
     if config['use_wandb']:
         wandb.finish()

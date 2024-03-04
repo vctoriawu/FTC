@@ -84,11 +84,6 @@ def remove_ids(remove_ids, dataset):
     
     return dataset
 
-    
-    
-
-
-
 #utils from tabular transformer finetuning branch
 def preprocess_as_data(train, val, test, cat_cols):
 
@@ -200,7 +195,7 @@ def load_as_data(csv_path: str,
 
         #Replace any -1 values with NaNs for imputing
         #nan_df = data_df.replace(-1, np.nan)
-        
+
         #Sample data to only contain num_ex rows
         sampled_df = data_df.sample(n=num_ex, random_state=random_seed)
 

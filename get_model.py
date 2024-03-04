@@ -205,7 +205,8 @@ def get_model(config):
                                 num_hidden_layers=num_hidden_layers, 
                                 intermediate_size=intermediate_size, 
                                 rm_branch=rm_branch, use_conv=use_conv,
-                                attention_heads=attention_heads, use_tab=config['use_tab'])
+                                attention_heads=attention_heads, use_tab=config['use_tab'],
+                                multimodal = config["multimodal"])
             
         if config['model'] == "resae":
             

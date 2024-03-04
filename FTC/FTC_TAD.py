@@ -164,7 +164,8 @@ class FTC(nn.Module):
                 tab_input_dim, 
                 tab_emb_dims,
                 loaded_parameters, 
-                pretrained = False):
+                pretrained = False,
+                multimodal = "fttrans"):
         super(FTC, self).__init__()
         
         last_features = 4
@@ -230,16 +231,29 @@ class FTC(nn.Module):
 
         self.cross_attention = cross_attention
 
-        self.tab_embed = construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
-                                                 loaded_dim, loaded_depth, loaded_heads, loaded_dim_head, loaded_dim_out,
-                                                 loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
-                                                 loaded_hidden_dim, loaded_classification,
-                                                 loaded_numerical_bins, loaded_emb_type)
-        self.tab_embed.load_state_dict(torch.load('../as_transformer.pth'))
-        
-        # Set requires_grad to False for all parameters
-        for param in self.tab_embed.parameters():
-            param.requires_grad = False
+        self.multimodal = multimodal
+        if multimodal == "fttrans":
+            self.tab_embed = construct_ASTransformer(loaded_categories, loaded_num_continuous, loaded_numerical_features,
+                                                    loaded_dim, loaded_depth, loaded_heads, loaded_dim_head, loaded_dim_out,
+                                                    loaded_num_special_tokens, loaded_attn_dropout, loaded_ff_dropout,
+                                                    loaded_hidden_dim, loaded_classification,
+                                                    loaded_numerical_bins, loaded_emb_type)
+            self.tab_embed.load_state_dict(torch.load('../as_transformer.pth'))
+            
+            # Set requires_grad to False for all parameters
+            for param in self.tab_embed.parameters():
+                param.requires_grad = False
+        elif multimodal == "mlp":
+            self.tab_embed = nn.Sequential(
+                nn.Linear(36, self.tab_emb_dims[1]*self.tab_emb_dims[2]),
+                nn.ReLU(),
+                nn.Linear(self.tab_emb_dims[1]*self.tab_emb_dims[2], self.tab_emb_dims[1]*self.tab_emb_dims[2])
+            )
+        elif multimodal == "clip":
+            self.tab_embed = nn.Sequential(
+                nn.Linear(36, embedding_dim),
+                nn.ReLU(),
+                nn.Linear(embedding_dim, 32*embedding_dim)) #TODO
 
         # Map video embeddings to video+tab embeddings
         self.map_embed = EmbeddingMappingFunction(embedding_dim, embedding_dim, embedding_dim)
@@ -278,21 +292,35 @@ class FTC(nn.Module):
         #integrate tab data
         if split=='Train':
             if self.use_tab:
-                tab_x = torch.unsqueeze(tab_x, dim=-1) 
-                
-                # B x F x 1
-                #Tranform x feature values to higher dim using a shared mlp layer
-                _, tab_x = self.tab_embed(tab_x)
 
-                #cross attention between video and tabular embeddings
-                ca_outputs = self.cross_attention(outputs, tab_x)
+                if self.multimodal == "fttrans":
+                    tab_x = torch.unsqueeze(tab_x, dim=-1) 
+                    print(tab_x.shape)
+                    
+                    # B x F x 1
+                    #Tranform x feature values to higher dim using a shared mlp layer
+                    _, tab_x = self.tab_embed(tab_x)
+                    print(tab_x.shape)
+                    #cross attention between video and tabular embeddings
+                    ca_outputs = self.cross_attention(outputs, tab_x)
+                elif self.multimodal == "mlp":
+                    b, _ = tab_x.shape
+
+                    #Tranform x feature values to higher dim using a shared mlp layer
+                    tab_x = self.tab_embed(tab_x).reshape(b, self.tab_emb_dims[1], self.tab_emb_dims[2])
+                    #cross attention between video and tabular embeddings
+                    ca_outputs = self.cross_attention(outputs, tab_x)
+                elif self.multimodal == "clip":
+                    b, _ = tab_x.shape
+                    ca_outputs = self.tab_embed(tab_x).reshape(b, outputs.shape[1], outputs.shape[2])
+
                 ca_outputs = self.vt_proj_head(ca_outputs)
 
                 # we want to get ca_outputs from outputs using our embedding mapping function
                 learned_joint_emb = self.map_embed(outputs)
         else:
             print("Cross-attention module has been skipped.")
-            #outputs = self.map_embed(outputs)
+            outputs = self.map_embed(outputs)
             learned_joint_emb = outputs
             ca_outputs = outputs
 
@@ -363,7 +391,8 @@ def get_model_tad(emb_dim,
               rm_branch = None,
               use_conv = False,
               attention_heads=16,
-              use_tab=True
+              use_tab=True,
+              multimodal="fttrans"
               ):
     
     model_res = torchvision.models.resnet18()
@@ -402,6 +431,7 @@ def get_model_tad(emb_dim,
                 tab_input_dim=tab_input_dim, 
                 tab_emb_dims=tab_emb_dims,
                 loaded_parameters=loaded_parameters, 
-                pretrained=False,) 
+                pretrained=False,
+                multimodal=multimodal) 
     
     return model
