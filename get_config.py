@@ -6,8 +6,8 @@ def get_config():
     config['use_wandb'] = True
     config['use_cuda'] = True
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_img_1"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_img_1"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_img_2"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_img_2"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax

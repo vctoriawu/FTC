@@ -179,6 +179,7 @@ class wrn_video(nn.Module):
             learned_joint_emb = learned_joint_emb.view(b*f, d)
         else:
             print("Cross-attention module has been skipped.")
+            outputs = outputs.view(-1, nF, 1000)
             b, f, d = outputs.shape
             outputs = self.map_embed(outputs)
             learned_joint_emb = outputs
@@ -187,11 +188,7 @@ class wrn_video(nn.Module):
             learned_joint_emb = learned_joint_emb.view(b*f, d)
 
         # cross attention preds
-        if split=='Train':
-            ca_out = self.relu(ca_outputs)
-        else:
-            ca_out = out
-
+        ca_out = self.relu(ca_outputs)
         out = self.relu(learned_joint_emb)
 
         out = out.view(-1, nF, 1000)
