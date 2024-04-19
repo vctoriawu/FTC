@@ -7,9 +7,9 @@ def get_config():
     config['use_cuda'] = True
     config['num_workers'] = 8
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "FTC_image_tmed" 
+    config['model_load_dir'] = "FTC_image_tmed_3" 
     #"/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_1d"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/FTC_image_tmed" 
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/FTC_image_tmed_3" 
     #"/workspace/miccai2024_savedmodels/FTC/logs/4_class_CLIP_1d"
 
     # Hyperparameters for dataset. 

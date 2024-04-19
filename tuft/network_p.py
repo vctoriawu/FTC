@@ -380,7 +380,7 @@ class Network(object):
              }
         df = pd.DataFrame(data=d)
         # save the dataframe
-        test_results_file = os.path.join(self.best_model_dir, "tmed_"+ mode+".csv")
+        test_results_file = os.path.join(self.config['best_model_dir'], "tmed_"+ mode+".csv")
         df.to_csv(test_results_file)
 
 # if __name__ == "__main__":

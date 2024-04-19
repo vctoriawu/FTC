@@ -51,8 +51,8 @@ def png_loader(path):
 
 label_schemes: Dict[str, Dict[str, Union[int, float]]] = {
     'binary': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 1, 'moderate_AS': 1, 'severe_AS': 1},
-    'mild_mod': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 1, 'moderate_AS': 2, 'severe_AS': 2},
-    'mod_severe': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 1, 'moderate_AS': 1, 'severe_AS': 2},
+    'mod_severe': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 1, 'moderate_AS': 2, 'severe_AS': 2},
+    'mild_mod': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 1, 'moderate_AS': 1, 'severe_AS': 2},
     'four_class': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 1, 'moderate_AS': 2, 'severe_AS': 3},
     'five_class': {'no_AS': 0, 'mild_AS': 1, 'mildtomod_AS': 2, 'moderate_AS': 3, 'severe_AS': 4},
 }
@@ -68,8 +68,8 @@ view_schemes: Dict[str, Dict[str, Union[int, float]]] = {
 #For human reference
 class_labels: Dict[str, List[str]] = {
     'binary': ['No AS', 'AS'],
-    'mild_mod': ['No AS', 'Early', 'Significant'],
-    'mod_severe': ['No AS', 'Mild-mod', 'Severe'],
+    'mod_severe': ['No AS', 'Early', 'Significant'],
+    'mild_mod': ['No AS', 'Mild-mod', 'Severe'],
     'four_class': ['No AS', 'Mild', 'Moderate', 'Severe'],
     'five_class': ['No AS', 'Mild', 'Mild-mod', 'Moderate', 'Severe']
 }

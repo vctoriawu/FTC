@@ -15,7 +15,7 @@ if __name__ == "__main__":
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="TMED", entity="asproject",config = config, name = 'FTC_image_tmed_test')
+        run = wandb.init(project="TMED", entity="asproject",config = config, name = 'FTC_image_tmed_test_3')
     
     model = get_model(config)
     net = Network(model, config)

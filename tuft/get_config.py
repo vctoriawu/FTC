@@ -6,10 +6,9 @@ def get_config():
     config['use_wandb'] = False
     config['use_cuda'] = True
     config['num_workers'] = 8
-    config['log_dir'] = "/AS_clean/tuft_fs/logs"
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
-    config['model_load_dir'] = "FTC_image_tmed" 
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/FTC_image_tmed" 
+    config['model_load_dir'] = "FTC_image_tmed_3" 
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/FTC_image_tmed_3" 
 
     # Hyperparameters for dataset. 
     config['view'] = 'plaxpsax' # all/plax/psax
