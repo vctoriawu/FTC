@@ -1,6 +1,7 @@
 from torch.nn.modules.activation import LeakyReLU
 from torch.nn.modules.dropout import Dropout
 from transformers import BertConfig, BertModel
+import numpy as np
 import torch
 import torch.nn as nn
 import torchvision
@@ -9,6 +10,11 @@ from FTC.posembedding import build_position_encoding
 from FTC.deformable_transformer import DeformableTransformer
 from FTC.util.misc import NestedTensor, construct_ASTransformer
 from einops import rearrange
+from random import seed
+
+seed(42)
+torch.random.manual_seed(42)
+np.random.seed(42)
 
 class CrossAttention(nn.Module):
     """
@@ -52,9 +58,11 @@ class CrossAttention(nn.Module):
         #get shape of video input
         b, f, _ = x.shape
         h = self.heads
-        kv_input = self.tab_norm(tab_x)
+        #kv_input = self.tab_norm(tab_x)
+        kv_input = self.tab_norm(x)
         # q, k, v = self.to_q(x), self.to_k(kv_input), self.to_v(kv_input)
-        q = self.norm_q(self.to_q(self.vid_norm(x)))
+        #q = self.norm_q(self.to_q(self.vid_norm(x)))
+        q = self.norm_q(self.to_q(self.vid_norm(tab_x)))
         k = self.norm_k(self.to_k(kv_input))
         v = self.to_v(kv_input)
         q, k, v = map(lambda t: rearrange(tensor=t, pattern='b f (h d) -> b h f d', h=h), (q, k, v))

@@ -23,7 +23,7 @@ torch.random.manual_seed(42)
 np.random.seed(42)
 
 img_path_dataset = '/workspace/data/as_tom/annotations-all.csv'
-tab_path_dataset = '/workspace/data/finetune/finetuned_df.csv'
+tab_path_dataset = '/workspace/data/as_tom/finetuned_df.csv'
 dataset_root = r"/workspace/data/as_tom"
 cine_loader = 'mat_loader'
 

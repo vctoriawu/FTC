@@ -17,6 +17,12 @@ from utils import validation_constructive
 from pathlib import Path
 from sklearn.metrics import confusion_matrix, balanced_accuracy_score
 
+from random import seed
+
+seed(42)
+torch.random.manual_seed(42)
+np.random.seed(42)
+
 class TransformerFeatureMap:
     def __init__(self, model, layer_name='avgpool'):
         self.model = model
