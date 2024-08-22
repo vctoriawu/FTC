@@ -5,8 +5,8 @@ def get_config():
     config['mode'] = "test"
     config['use_wandb'] = False
     config['use_cuda'] = True
-    config['log_dir'] = "/AS_Neda/FTC/logs"
-    config['model_load_dir'] = None # required for test-only mode
+    config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs"
+    config['model_load_dir'] = "ftc_4_class"#None # required for test-only mode
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax

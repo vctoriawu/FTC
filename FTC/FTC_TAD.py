@@ -4,7 +4,7 @@ from transformers import BertConfig, BertModel
 import torch
 import torch.nn as nn
 import torchvision
-from ResNetAE.ResNetAE import ResNetAE
+#from ResNetAE.ResNetAE import ResNetAE
 from FTC.posembedding import build_position_encoding
 from FTC.deformable_transformer import DeformableTransformer
 from FTC.util.misc import NestedTensor

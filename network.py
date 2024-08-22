@@ -119,9 +119,9 @@ class Network(object):
         self.checkpts_file = os.path.join(self.log_dir, "checkpoint.pth")
 
         # We save model that achieves the best performance: early stopping strategy.
-        #self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
-        self.bestmodel_file = Path('/AS_Neda/FTC/logs/tad_1e-4_tclloss_batch16/best_model.pth')
-        self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
+        self.bestmodel_file = os.path.join(self.log_dir, "best_model.pth")
+        #self.bestmodel_file = Path('/AS_Neda/FTC/logs/tad_1e-4_tclloss_batch16/best_model.pth')
+        #self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
         
         # For test, we also save the results dataframe
         self.test_results_file = os.path.join(self.log_dir, "best_model.pth")
@@ -441,6 +441,7 @@ class Network(object):
         fn, patient, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[]
         target_AS_arr, target_B_arr, pred_AS_arr, pred_B_arr = [], [], [], []
         max_AS_arr, entropy_AS_arr, vacuity_AS_arr, uni_AS_arr = [], [], [], []
+        att_weight_arr = []
         #max_B_arr, entropy_B_arr, vacuity_B_arr = [], [], []
         predicted_qual = []
         embeddings = []
@@ -470,7 +471,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs = self.model(cine) # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs,att_weight = self.model(cine) # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine) # Bx3xTxHxW
             # collect the model prediction info
@@ -478,6 +479,8 @@ class Network(object):
             pred_AS_arr.append(argm.cpu().numpy()[0])
             max_AS_arr.append(max_p.cpu().numpy()[0])
             entropy_AS_arr.append(ent.cpu().numpy()[0])
+            att_weight_arr.append(att_weight.cpu().numpy()[0])
+
             if self.loss_type == 'evidential':
                 vacuity_AS_arr.append(vac.cpu().numpy()[0])
             else:
@@ -492,6 +495,7 @@ class Network(object):
         d = {'path':fn, 'id':patient, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
              'GT_AS':target_AS_arr, 'pred_AS':pred_AS_arr, 'max_AS':max_AS_arr,
              'ent_AS':entropy_AS_arr, 'vac_AS':vacuity_AS_arr, 'uni_AS':uni_AS_arr,
+             'att_weight':att_weight_arr
              # 'GT_B':target_B_arr, 'pred_B':pred_B_arr, 'max_B':max_B_arr,
              # 'ent_B':entropy_B_arr, 'vac_B':vacuity_B_arr, 
              }
