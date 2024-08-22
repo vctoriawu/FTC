@@ -494,6 +494,7 @@ class Network(object):
         fn, patient, echo, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[], []
         target_AS_arr, target_B_arr, pred_AS_arr, pred_logits_arr = [], [], [], []
         max_AS_arr, entropy_AS_arr, vacuity_AS_arr, uni_AS_arr = [], [], [], []
+        att_weight_arr, ca_att_weight_arr = [], []
         #max_B_arr, entropy_B_arr, vacuity_B_arr = [], [], []
         predicted_qual = []
         embeddings = []
@@ -525,7 +526,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_image_tmed":
-                _, pred_AS, _, _, _ = self.model(cine, tab_info, split='Test')
+                _, pred_AS, _, _, _, att_weight, ca_att_weight = self.model(cine, tab_info, split='Test')
             elif self.config['model'] == "FTC_TAD":
                 pred_AS,entropy_attention,outputs, att_weight, _, _, embedding = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             else:
@@ -535,6 +536,9 @@ class Network(object):
             pred_AS_arr.append(argm.cpu().numpy()[0])
             max_AS_arr.append(max_p.cpu().numpy()[0])
             entropy_AS_arr.append(ent.cpu().numpy()[0])
+            att_weight_arr.append(att_weight.cpu().numpy()[0])
+            ca_att_weight_arr.append(ca_att_weight.cpu().numpy()[0])
+
             if self.loss_type == 'evidential':
                 vacuity_AS_arr.append(vac.cpu().numpy()[0])
             else:
@@ -550,7 +554,8 @@ class Network(object):
         d = {'path':fn, 'id':patient, 'echo_id': echo, 'view':view, 'age':age, 'as':as_label, 'bicuspid': bicuspid ,
              'GT_AS':target_AS_arr, 'pred_AS':pred_AS_arr, 'max_AS':max_AS_arr,
              'ent_AS':entropy_AS_arr, 'vac_AS':vacuity_AS_arr, 'uni_AS':uni_AS_arr,
-             'pred_logits_AS': pred_logits_arr
+             'pred_logits_AS': pred_logits_arr,
+             'att_weight': att_weight_arr, 'ca_att_weight': ca_att_weight_arr
              # 'GT_B':target_B_arr, 'pred_B':pred_B_arr, 'max_B':max_B_arr,
              # 'ent_B':entropy_B_arr, 'vac_B':vacuity_B_arr, 
              }

@@ -214,4 +214,4 @@ class wrn_video(nn.Module):
         #B x T x 2 => B x 2
         pred_view = torch.mean(pred_view, dim=1)
 
-        return pred_view , as_prediction, as_ca_prediction, learned_joint_emb, ca_outputs
+        return pred_view , as_prediction, as_ca_prediction, learned_joint_emb, ca_outputs, att_weight, ca_att_weight
