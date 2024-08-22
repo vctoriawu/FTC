@@ -4,11 +4,14 @@ from get_config import get_config
 from dataloader.as_dataloader import get_as_dataloader
 from get_model import get_model
 import os
+import sys
 from utils import validation_constructive
 
 import wandb
 
 if __name__ == "__main__":
+    #sys.path.append('/workspace/miccai2024/tab-transformer-pytorch')
+
     config = get_config()
     
     if config['use_wandb']:

@@ -380,7 +380,7 @@ class FTC(nn.Module):
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
 
-        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions, learned_joint_emb, ca_outputs
+        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions, learned_joint_emb, ca_outputs, ca_att_weight
 
 def get_model_tad(emb_dim, 
               tab_input_dim, 

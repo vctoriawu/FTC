@@ -27,6 +27,7 @@ import logging
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
 
+import tab_transformer_pytorch
 from tab_transformer_pytorch.ft_transformer import FTTransformer
 
 
