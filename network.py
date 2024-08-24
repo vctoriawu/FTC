@@ -266,7 +266,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, _, ca_preds, learned_emb, ca_embed, ca_att_weight = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, att_weight, ca_preds, learned_emb, ca_embed, ca_att_weight = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
                             ca_emb_loss, _, _ = self.embed_loss_cos(learned_emb, ca_embed, target_AS)
@@ -278,6 +278,10 @@ class Network(object):
                             npair_loss = torch.mean(-torch.sum(self.pos_e*similarity_matrix,dim =2) + 
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
+                            
+                            # Cosine sim between video attention and multimodal attention weights TODO 
+                            cos = torch.nn.CosineSimilarity()
+                            cos_sim_att_loss = cos(ca_att_weight, att_weight).mean().item()
 
                             if self.config["coteaching"] == True:
                                 if self.config['abstention'] == True:
@@ -288,7 +292,7 @@ class Network(object):
                                 loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                                 loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
 
-                            loss = 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss = 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss) + cos_sim_att_loss
                             losses += [loss] 
                         
                         else:
@@ -539,7 +543,8 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight, _, _, embedding, ca_att_weight = self.model(cine, tab_info, split='Train') # Bx3xTxHxW
+                pred_AS,entropy_attention,outputs, att_weight, _, _, embedding, ca_att_weight = self.model(cine, tab_info, split='Train') #TO CHANGE
+                # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW
             # collect the model prediction info
@@ -572,7 +577,7 @@ class Network(object):
              }
         df = pd.DataFrame(data=d)
         # save the dataframe
-        test_results_file = os.path.join(self.log_dir, mode+".csv")
+        test_results_file = os.path.join(self.log_dir, mode+".csv") 
         df.to_csv(test_results_file)
         if record_embeddings:
             embeddings = np.array(embeddings)

@@ -295,12 +295,11 @@ class FTC(nn.Module):
 
                 if self.multimodal == "fttrans":
                     tab_x = torch.unsqueeze(tab_x, dim=-1) 
-                    print(tab_x.shape)
                     
                     # B x F x 1
                     #Tranform x feature values to higher dim using a shared mlp layer
                     _, tab_x = self.tab_embed(tab_x)
-                    print(tab_x.shape)
+                    
                     #cross attention between video and tabular embeddings
                     ca_outputs = self.cross_attention(outputs, tab_x)
                 elif self.multimodal == "mlp":
@@ -358,7 +357,7 @@ class FTC(nn.Module):
             att_weight = nn.functional.softmax(att_weight, dim=1)
             ca_att_weight = nn.functional.softmax(ca_att_weight, dim=1)
             # B x T x 4   =>  B x 4
-            as_prediction = (as_prediction * att_weight).sum(1)
+            as_prediction = (as_prediction * att_weight).sum(1) 
             as_ca_predictions = (as_ca_predictions * ca_att_weight).sum(1)
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
