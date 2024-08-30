@@ -371,7 +371,7 @@ class FTC(nn.Module):
             as_prediction = self.aorticstenosispred(outputs)
             
             # attention weights B x F x 1
-            att_weight = self.attentionweights(embeddings_reshaped.permute(0,2,1))
+            att_weight = self.attentionweights(embeddings_reshaped.permute(0,2,1)) 
             att_weight = nn.functional.softmax(att_weight, dim=1)
             # B x T x 4   =>  B x 4
             as_prediction = (as_prediction * att_weight).sum(1)

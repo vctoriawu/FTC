@@ -44,6 +44,7 @@ def get_config():
     config['abstention'] = False
     config["coteaching"] = True
     config['multimodal'] = "fttrans" # clip/mlp/fttrans
+    config["frame_attention_loss"] = "kl_div" # cosine_sim
 
     # Hyperparameters for training.
     config['batch_size'] = 16
