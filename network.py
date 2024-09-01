@@ -266,7 +266,7 @@ class Network(object):
                             target_AS = target_AS.cuda()
                             target_B = target_B.cuda()
                         if self.config['model'] == "FTC_TAD":
-                            pred_AS,entropy_attention,outputs, att_weight, ca_preds, learned_emb, ca_embed, ca_att_weight = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
+                            pred_AS,entropy_attention,outputs, att_weight, ca_preds, learned_emb, ca_embed, ca_att_weight, multimodal_att_entropy = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             
                             # Calculate loss between learned joint embeddings
                             ca_emb_loss, _, _ = self.embed_loss_cos(learned_emb, ca_embed, target_AS)
@@ -279,15 +279,22 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
-                            # Cosine sim between video attention and multimodal attention weights TODO
+                            # Alignment between video and multimodal attention weights 
+                            frame_att_loss_weight = self.config["frame_att_loss_weight"]
+                            if not self.config["multimodal_att_entropy"]:
+                                    multimodal_att_entropy = multimodal_att_entropy * 0  
+
                             if self.config["frame_attention_loss"] == "cosine_sim":
                                 cos = torch.nn.CosineSimilarity()
-                                frame_att_loss = cos(ca_att_weight, att_weight).mean().item()
+                                frame_att_loss = cos(ca_att_weight, att_weight).mean().item()                                 
+
                             elif self.config["frame_attention_loss"] == "kl_div":
                                 ## model outputs need to be log probabilities, targets need to be probabilities
                                 att_weight = torch.log(att_weight)
                                 frame_att_loss = F.kl_div(input=att_weight, target=ca_att_weight, log_target=True, reduction='mean')
                                 
+                            else:
+                                frame_att_loss = 0
 
                             if self.config["coteaching"] == True:
                                 if self.config['abstention'] == True:
@@ -298,7 +305,8 @@ class Network(object):
                                 loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                                 loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
 
-                            loss = frame_att_loss + 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) +0.1*torch.mean(npair_loss)
+                            loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) + \
+                                   0.1*torch.mean(npair_loss) + 0.05*(torch.mean(multimodal_att_entropy))
                             losses += [loss] 
                         
                         else:
@@ -444,7 +452,7 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS, _, _, _, _, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
 
@@ -549,7 +557,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight, _, _, embedding, ca_att_weight = self.model(cine, tab_info, split='Train') #TO CHANGE
+                pred_AS,entropy_attention,outputs, att_weight, _, _, embedding, ca_att_weight, multimodal_att_entropy = self.model(cine, tab_info, split='Train') #TO CHANGE
                 # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW

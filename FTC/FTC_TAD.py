@@ -361,6 +361,7 @@ class FTC(nn.Module):
             as_ca_predictions = (as_ca_predictions * ca_att_weight).sum(1)
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
+            multimodal_att_entropy = torch.sum(-ca_att_weight*torch.log(ca_att_weight), dim=1)
             
             # Calculate the embeddings for CLIP loss
             learned_joint_emb = (learned_joint_emb * att_weight).sum(1)
@@ -379,7 +380,7 @@ class FTC(nn.Module):
             # Calculating the entropy for attention
             entropy_attention = torch.sum(-att_weight*torch.log(att_weight), dim=1)
 
-        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions, learned_joint_emb, ca_outputs, ca_att_weight
+        return as_prediction,entropy_attention,outputs,att_weight,as_ca_predictions, learned_joint_emb, ca_outputs, ca_att_weight, multimodal_att_entropy
 
 def get_model_tad(emb_dim, 
               tab_input_dim, 
