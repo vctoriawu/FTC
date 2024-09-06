@@ -64,7 +64,6 @@ class Network(object):
         self.pos , self.neg = NPairsample()
         if config['cotrastive_method']=='Linear':
             checkpoint = torch.load(Path('/AS_Neda/FTC/logs/tad_1e-4_added_losses_try2/checkpoint.pth'))
-            #TODO - change path
             self.model.load_state_dict(checkpoint["model"], strict=False)
             print("Checkpoint_loaded")
         if self.config['use_cuda']:  
@@ -73,11 +72,30 @@ class Network(object):
                 self.model = torch.nn.DataParallel(self.model)
             self.model.cuda()
         self.num_classes_AS = config['num_classes']
+
+# TODO - finish setting up regularization only on the video encoder
+# # Separate parameters into groups
+#         params_with_l2 = []
+#         params_without_l2 = []
+# # Apply L2 regularization only to video encoder weights
+#         for name, param in self.model.named_parameters():
+#             # Apply L2 regularization
+#             if 'AE.weight' or 'transformer.weight' or 'aorticstenosispred.weight' in name:
+#                 params_with_l2.append(param)
+#             # Exclude other parameters 
+#             else:  
+#                 params_without_l2.append(param)
+
         if config['cotrastive_method']=='Linear':
-            self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=config['lr'])
+            self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=config['lr']) 
             
         else:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'], weight_decay=1e-4) ## only use L2 norm for video encoder
+            # TODO - finish setting up regularization only on the video encoder
+            # self.optimizer = torch.optim.Adam([
+            #     {'params': params_with_l2, 'weight_decay': 1e-4},
+            #     {'params': params_without_l2, 'weight_decay': 0.0}
+            #     ], lr=config['lr'])
 
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
                                                                     T_max=config['num_epochs'],
@@ -129,12 +147,12 @@ class Network(object):
         self.best_model_dir = self.config['best_model_dir']
         if not os.path.exists(self.best_model_dir):
             os.makedirs(self.best_model_dir)      
-        self.bestmodel_file = os.path.join(self.best_model_dir, 'best_model.pth')
+        self.bestmodel_acc = os.path.join(self.best_model_dir, 'best_model_acc.pth')
+        self.bestmodel_loss = os.path.join(self.best_model_dir, 'best_model_loss.pth')
         self.bestmodel_file_contrastive = os.path.join(self.log_dir, "best_model_cont.pth")
         # For test, we also save the results dataframe
         self.test_results_file = os.path.join(self.log_dir, "best_model.pth")
 
-        #TODO
         # if self.config['use_tab']:
         #     self.checkpts_file = os.path.join(self.log_dir, "multimodal_checkpoint.pth")
 
@@ -233,6 +251,7 @@ class Network(object):
         # Switch model into train mode.
         self.model.train()
         best_va_acc = 0.0 # Record the best validation metrics.
+        best_va_loss = 10.0
         best_va_acc_supcon = 0.0
         forget_rate = 0.0625
         best_cont_loss = 1000
@@ -243,6 +262,14 @@ class Network(object):
             #losses_AS = []
             #losses_B = []
             losses = []
+            losses_vid = []
+            losses_tab = []
+            losses_ca_emb = []
+            losses_npair = []
+            losses_frame_att = []
+            losses_vid_entropy = []
+            losses_multimodal_entropy = []
+
             correct_predictions = 0
             total_samples = 0
             print('Epoch: ' + str(epoch) + ' LR: ' + str(self.optimizer.param_groups[0]["lr"])) #get_lr()))
@@ -279,6 +306,8 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
+                            #entropy_attention = entropy_attention * 0
+
                             # Alignment between video and multimodal attention weights 
                             frame_att_loss_weight = self.config["frame_att_loss_weight"]
                             if not self.config["multimodal_att_entropy"]:
@@ -287,11 +316,10 @@ class Network(object):
                             if self.config["frame_attention_loss"] == "cosine_sim":
                                 cos = torch.nn.CosineSimilarity()
                                 frame_att_loss = cos(ca_att_weight, att_weight).mean().item()                                 
-
                             elif self.config["frame_attention_loss"] == "kl_div":
                                 ## model outputs need to be log probabilities, targets need to be probabilities
                                 att_weight = torch.log(att_weight)
-                                frame_att_loss = F.kl_div(input=att_weight, target=ca_att_weight, log_target=True, reduction='mean')
+                                frame_att_loss = F.kl_div(input=att_weight, target=ca_att_weight, log_target=False, reduction='mean')
                                 
                             else:
                                 frame_att_loss = 0
@@ -307,8 +335,16 @@ class Network(object):
 
                             loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) + \
                                    0.1*torch.mean(npair_loss) + 0.05*(torch.mean(multimodal_att_entropy))
+                            
                             losses += [loss] 
-                        
+                            losses_vid += [loss_vid]
+                            losses_tab += [loss_tab]
+                            losses_ca_emb += [0.5*ca_emb_loss]
+                            losses_npair += [0.1*torch.mean(npair_loss)]
+                            losses_frame_att += [frame_att_loss_weight*frame_att_loss]
+                            losses_vid_entropy +=[0.05*(torch.mean(entropy_attention))]
+                            losses_multimodal_entropy += [0.05*(torch.mean(multimodal_att_entropy))]
+
                         else:
                             pred_AS = self.model(cine, tab_data, split='Train') # Bx3xTxHxW
                             loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
@@ -354,19 +390,46 @@ class Network(object):
 
             #loss_avg_AS = torch.mean(torch.stack(losses_AS)).item()
             #loss_avg_B = torch.mean(torch.stack(losses_B)).item()
-            loss_avg = torch.mean(torch.stack(losses)).item()
+            loss_avg = torch.mean(torch.stack(losses)).item() 
+            loss_avg_vid = torch.mean(torch.stack(losses_vid)).item()
+            loss_avg_tab = torch.mean(torch.stack(losses_tab)).item()
+            loss_avg_ca_emb = torch.mean(torch.stack(losses_ca_emb)).item()
+            loss_avg_npair = torch.mean(torch.stack(losses_npair)).item()
+            loss_avg_frame_att = torch.mean(torch.stack(losses_frame_att)).item()
+            loss_avg_vid_entropy = torch.mean(torch.stack(losses_vid_entropy)).item()
+            loss_avg_multimodal_entropy = torch.mean(torch.stack(losses_multimodal_entropy)).item()
             #acc_AS, f1_B, val_loss = self.test(loader_va, mode="val")
             if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':
                 ## Validation Data Evaluation 
-                acc_AS, val_loss = self.test(loader_va, mode="val")
+                acc_AS, val_total_loss, val_loss_avg_vid, val_loss_avg_tab, val_loss_avg_ca_emb, val_loss_avg_npair, val_loss_avg_frame_att, val_loss_avg_vid_entropy, val_loss_avg_multimodal_entropy = self.test(loader_va, mode="val") #TODO - log all losses
                 if self.config['use_wandb']:
-                    wandb.log({"tr_loss":loss_avg, "val_loss":val_loss, "val_AS_acc":acc_AS})
+                    wandb.log({##training losses
+                               "tr_loss-total":loss_avg, 
+                               "tr_loss-vid": loss_avg_vid,
+                               "tr_loss-tab": loss_avg_tab,
+                               "tr_loss-clip": loss_avg_ca_emb,
+                               "tr_loss-npair": loss_avg_npair,
+                               "tr_loss-frame_att": loss_avg_frame_att,
+                               "tr_loss-vid_entropy": loss_avg_vid_entropy,
+                               "tr_loss-multimodal-entropy": loss_avg_multimodal_entropy,
+                               "tr_acc": (correct_predictions / total_samples),
+                               "LR": self.optimizer.param_groups[0]["lr"],
+                               ##val losses
+                               "val_loss":val_total_loss, 
+                               "val_loss-vid": val_loss_avg_vid,
+                               "val_loss-tab": val_loss_avg_tab,
+                               "val_loss-clip": val_loss_avg_ca_emb,
+                               "val_loss-npair": val_loss_avg_npair,
+                               "val_loss-frame_att": val_loss_avg_frame_att,
+                               "val_loss-vid_entropy": val_loss_avg_vid_entropy,
+                               "val_loss-multimodal-entropy": val_loss_avg_multimodal_entropy,
+                               "val_AS_acc":acc_AS})
                     # wandb.log({"tr_loss_AS":loss_avg_AS, "tr_loss_B":loss_avg_B, "tr_loss":loss_avg,
                     #            "val_loss":val_loss, "val_B_f1":f1_B, "val_AS_acc":acc_AS})
                 ## Test Data Evaluation    
-                acc_AS_te, te_loss = self.test(loader_te, mode="val")
+                acc_AS_te, te_total_loss, _, _, _, _, _, _, _ = self.test(loader_te, mode="val")
                 if self.config['use_wandb']:
-                    wandb.log({ "te_loss":te_loss, "test_AS_acc":acc_AS_te})
+                    wandb.log({ "te_loss":te_total_loss, "test_AS_acc":acc_AS_te})
 
                 # Save model every epoch.
                 self._save(self.checkpts_file)
@@ -376,14 +439,19 @@ class Network(object):
                     # Save model with the best accuracy on validation set.
                     best_va_acc = acc_AS
                     #best_B_f1 = f1_B
-                    self._save(self.bestmodel_file)
+                    self._save(self.bestmodel_acc)
+                
+                if val_total_loss < best_va_loss:
+                    # Save model with lowest loss on val set
+                    best_va_loss = val_total_loss
+                    self._save(self.bestmodel_loss)
                 # print(
                 #     "Epoch: %3d, loss: %.5f/%.5f, val loss: %.5f, acc: %.5f/%.5f, top AS acc: %.5f/%.5f"
                 #     % (epoch, loss_avg_AS, loss_avg_B, val_loss, acc_AS, f1_B, best_va_acc, best_B_f1)
                 # )
                 print(
-                    "Epoch: %3d, loss: %.5f, train acc: %.5f, val loss: %.5f, acc: %.5f, top AS acc: %.5f"
-                    % (epoch, loss_avg, (correct_predictions / total_samples), val_loss, acc_AS, best_va_acc)
+                    "Epoch: %3d, loss: %.5f, train acc: %.5f, val loss: %.5f, val acc: %.5f, top AS acc: %.5f"
+                    % (epoch, loss_avg, (correct_predictions / total_samples), val_total_loss, acc_AS, best_va_acc)
                 ) 
 
                 # Recording training losses and validation performance.
@@ -417,20 +485,28 @@ class Network(object):
                
             
             # modify the learning rate
-            self.scheduler.step(val_loss)   
+            self.scheduler.step(val_total_loss)   
 
     @torch.no_grad()
     def test(self, loader_te, mode="test"):
         """Estimating the performance of model on the given dataset."""
         # Choose which model to evaluate.
         if mode=="test":
-            self._restore(self.bestmodel_file)
+            self._restore(self.bestmodel_acc)
         # Switch the model into eval mode.
         self.model.eval()
 
         conf_AS = np.zeros((self.num_classes_AS, self.num_classes_AS))
         #conf_B = np.zeros((2,2))
+        forget_rate = 0.0625
         losses = []
+        losses_vid = []
+        losses_tab = []
+        losses_ca_emb = []
+        losses_npair = []
+        losses_frame_att = []
+        losses_vid_entropy = []
+        losses_multimodal_entropy = []
         preds = []
         gt = []
         for data in tqdm(loader_te):
@@ -452,15 +528,57 @@ class Network(object):
                     target_B = target_B.cuda()
                     
                 if self.config['model'] == "FTC_TAD":
-                    pred_AS, _, _, _, _, _, _, _, _ = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
+                    pred_AS,entropy_attention,outputs, att_weight, ca_preds, learned_emb, ca_embed, ca_att_weight, multimodal_att_entropy = self.model(cine, tab_data, split='Train') # Bx3xTxHxW #Train split allows us to get multimodal outputs to calculate losses
                 else:
                     pred_AS = self.model(cine, tab_data, split='Test') # Bx3xTxHxW
 
-                if self.config['abstention'] == True:
-                    loss = self.abstention_loss.compute(pred_AS, target_AS)
+                # Calculate loss between learned joint embeddings
+                ca_emb_loss, _, _ = self.embed_loss_cos(learned_emb, ca_embed, target_AS)
+
+                # Calculating temporal coherent npair loss
+                similarity_matrix = (torch.bmm(outputs,outputs.permute((0,2,1)))/1024)
+                self.pos_e = self.pos.repeat(len(pred_AS),1,1)
+                self.neg_e = self.neg.repeat(len(pred_AS),1,1)
+                npair_loss = torch.mean(-torch.sum(self.pos_e*similarity_matrix,dim =2) + 
+                    torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
+                    torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
+
+                #entropy_attention = entropy_attention * 0
+                
+                # Alignment between video and multimodal attention weights 
+                frame_att_loss_weight = self.config["frame_att_loss_weight"]
+                if not self.config["multimodal_att_entropy"]:
+                        multimodal_att_entropy = multimodal_att_entropy * 0  
+                if self.config["frame_attention_loss"] == "cosine_sim":
+                    cos = torch.nn.CosineSimilarity()
+                    frame_att_loss = cos(ca_att_weight, att_weight).mean().item()                                 
+                elif self.config["frame_attention_loss"] == "kl_div":
+                    ## model outputs need to be log probabilities, targets need to be probabilities
+                    att_weight = torch.log(att_weight)
+                    frame_att_loss = F.kl_div(input=att_weight, target=ca_att_weight, log_target=False, reduction='mean')
                 else:
-                    loss = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+                    frame_att_loss = 0
+
+                # Coteaching + CE losses
+                if self.config["coteaching"] == True:
+                    if self.config['abstention'] == True:
+                        loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
+                    else:    
+                        loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate)
+                else:
+                    loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
+                    loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
+         
+                loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) + \
+                        0.1*torch.mean(npair_loss) + 0.05*(torch.mean(multimodal_att_entropy))
                 losses += [loss]
+                losses_vid += [loss_vid]
+                losses_tab += [loss_tab]
+                losses_ca_emb += [0.5*ca_emb_loss]
+                losses_npair += [0.1*torch.mean(npair_loss)]
+                losses_frame_att += [frame_att_loss_weight*frame_att_loss]
+                losses_vid_entropy +=[0.05*(torch.mean(entropy_attention))]
+                losses_multimodal_entropy += [0.05*(torch.mean(multimodal_att_entropy))]
 
             # Contrastive Learning
             else:
@@ -497,7 +615,14 @@ class Network(object):
             preds.append(argm_AS.cpu().numpy())
             gt.append(target_AS.cpu().numpy())
         if self.config['cotrastive_method'] == 'CE' or self.config['cotrastive_method'] == 'Linear':    
-            loss_avg = torch.mean(torch.stack(losses)).item()
+            total_loss_avg = torch.mean(torch.stack(losses)).item()
+            loss_avg_vid = torch.mean(torch.stack(losses_vid)).item()
+            loss_avg_tab = torch.mean(torch.stack(losses_tab)).item()
+            loss_avg_ca_emb = torch.mean(torch.stack(losses_ca_emb)).item()
+            loss_avg_npair = torch.mean(torch.stack(losses_npair)).item()
+            loss_avg_frame_att = torch.mean(torch.stack(losses_frame_att)).item()
+            loss_avg_vid_entropy = torch.mean(torch.stack(losses_vid_entropy)).item()
+            loss_avg_multimodal_entropy = torch.mean(torch.stack(losses_multimodal_entropy)).item()
             preds = [x for xs in preds for x in xs]
             gt = [x for xs in gt for x in xs]
             acc_AS = balanced_accuracy_score(gt, preds) #utils.balanced_acc_from_confusion_matrix(conf_AS)
@@ -506,7 +631,7 @@ class Network(object):
 
             # Switch the model into training mode
             self.model.train()
-            return acc_AS, loss_avg
+            return acc_AS, total_loss_avg, loss_avg_vid, loss_avg_tab, loss_avg_ca_emb, loss_avg_npair, loss_avg_frame_att, loss_avg_vid_entropy, loss_avg_multimodal_entropy
         else:
             loss_avg = torch.mean(torch.stack(losses)).item()
             self.model.train()
@@ -519,7 +644,8 @@ class Network(object):
         print('NOTE: test_comprehensive mode uses batch_size=1 to correctly display metadata')
         # Choose which model to evaluate.
         if mode=="test":
-            self._restore(self.bestmodel_file)
+            #self._restore(self.bestmodel_acc)
+            self._restore(self.bestmodel_loss)
         # Switch the model into eval mode.
         self.model.eval()
         fn, patient, echo, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[], []
@@ -557,7 +683,7 @@ class Network(object):
             # get the model prediction
             # pred_AS, pred_B = self.model(cine) #1x3xTxHxW
             if self.config['model'] == "FTC_TAD":
-                pred_AS,entropy_attention,outputs, att_weight, _, _, embedding, ca_att_weight, multimodal_att_entropy = self.model(cine, tab_info, split='Train') #TO CHANGE
+                pred_AS,entropy_attention,outputs, att_weight, _, _, embedding, ca_att_weight, multimodal_att_entropy = self.model(cine, tab_info, split='Train') #TODO CHANGE
                 # Bx3xTxHxW
             else:
                 pred_AS = self.model(cine, tab_info, split='Test') # Bx3xTxHxW

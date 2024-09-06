@@ -10,10 +10,12 @@ from utils import validation_constructive
 import wandb
 
 if __name__ == "__main__":
+    #os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
     config = get_config()
     
     if config['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4_class_0.5kl_div_att')
+        run = wandb.init(project="as_tab", entity="rcl_stroke", config = config, name = '4cls_0.5kl_reg-1e4')
     
     model = get_model(config)
     net = Network(model, config)

@@ -96,7 +96,8 @@ def get_as_dataloader(config, split, mode):
     elif mode=='val':
         flip = 0.0
         tra = False
-        bsize = config['batch_size']
+        #bsize = config['batch_size']
+        bsize = 12
         show_info = False
     elif mode=='test':
         flip = 0.0

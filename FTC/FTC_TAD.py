@@ -318,7 +318,7 @@ class FTC(nn.Module):
                 # we want to get ca_outputs from outputs using our embedding mapping function
                 learned_joint_emb = self.map_embed(outputs)
         else:
-            print("Cross-attention module has been skipped.")
+            #print("Cross-attention module has been skipped.")
             outputs = self.map_embed(outputs)
             learned_joint_emb = outputs
             ca_outputs = outputs
