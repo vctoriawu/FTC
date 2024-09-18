@@ -74,32 +74,41 @@ class Network(object):
         self.num_classes_AS = config['num_classes']
 
 # TODO - finish setting up regularization only on the video encoder
-# # Separate parameters into groups
-#         params_with_l2 = []
-#         params_without_l2 = []
-# # Apply L2 regularization only to video encoder weights
-#         for name, param in self.model.named_parameters():
-#             # Apply L2 regularization
-#             if 'AE.weight' or 'transformer.weight' or 'aorticstenosispred.weight' in name:
-#                 params_with_l2.append(param)
-#             # Exclude other parameters 
-#             else:  
-#                 params_without_l2.append(param)
+# Separate parameters into groups
+        params_with_l2 = []
+        params_without_l2 = []
+# Apply L2 regularization only to video encoder weights
+        for name, param in self.model.named_parameters():
+            # Apply L2 regularization
+            if 'AE' or 'transformer' or 'aorticstenosispred' in name:
+                params_with_l2.append(param)
+            # Exclude other parameters 
+            else:  
+                params_without_l2.append(param)
 
         if config['cotrastive_method']=='Linear':
             self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr=config['lr']) 
             
         else:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'], weight_decay=1e-4) ## only use L2 norm for video encoder
-            # TODO - finish setting up regularization only on the video encoder
-            # self.optimizer = torch.optim.Adam([
-            #     {'params': params_with_l2, 'weight_decay': 1e-4},
-            #     {'params': params_without_l2, 'weight_decay': 0.0}
-            #     ], lr=config['lr'])
+            if config['l2_reg_method']=='reg_on_vid_only': 
+                self.optimizer = torch.optim.Adam([
+                {'params': params_with_l2, 'weight_decay': 1e-4},
+                {'params': params_without_l2, 'weight_decay': 0.0}
+                ], lr=config['lr'])
+            elif config['l2_reg_method']== 'reg_on_all':
+                self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'], weight_decay=1e-4) 
+            else: #no reg
+                self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['lr'])
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
-                                                                    T_max=config['num_epochs'],
-                                                                    eta_min = 0.000001)
+        if config['lr_scheduler'] == 'reduce_on_plateau':
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
+                                                                        mode='min', 
+                                                                        factor=0.1, 
+                                                                        patience=5, verbose=False)
+        else:
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer,
+                                                                        T_max=config['num_epochs'],
+                                                                        eta_min = 0.000001)
         
         self.loss_type = config['loss_type']
         self.contrastive_method = config['cotrastive_method']
@@ -306,7 +315,9 @@ class Network(object):
                                torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                                torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
                             
-                            #entropy_attention = entropy_attention * 0
+                            # remove video entropy loss
+                            if not self.config["video_entropy"]:
+                                entropy_attention = entropy_attention * 0
 
                             # Alignment between video and multimodal attention weights 
                             frame_att_loss_weight = self.config["frame_att_loss_weight"]
@@ -322,7 +333,10 @@ class Network(object):
                                 frame_att_loss = F.kl_div(input=att_weight, target=ca_att_weight, log_target=False, reduction='mean')
                                 
                             else:
-                                frame_att_loss = 0
+                                frame_att_loss = torch.zeros(1).cuda()
+
+                            loss_vid_weight = self.config["loss_vid_weight"]
+                            loss_tab_weight = self.config["loss_tab_weight"]
 
                             if self.config["coteaching"] == True:
                                 if self.config['abstention'] == True:
@@ -333,12 +347,12 @@ class Network(object):
                                 loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                                 loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
 
-                            loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) + \
+                            loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid_weight*loss_vid + loss_tab_weight*loss_tab + 0.05*(torch.mean(entropy_attention)) + \
                                    0.1*torch.mean(npair_loss) + 0.05*(torch.mean(multimodal_att_entropy))
                             
                             losses += [loss] 
-                            losses_vid += [loss_vid]
-                            losses_tab += [loss_tab]
+                            losses_vid += [loss_vid_weight*loss_vid]
+                            losses_tab += [loss_tab_weight*loss_tab]
                             losses_ca_emb += [0.5*ca_emb_loss]
                             losses_npair += [0.1*torch.mean(npair_loss)]
                             losses_frame_att += [frame_att_loss_weight*frame_att_loss]
@@ -485,7 +499,7 @@ class Network(object):
                
             
             # modify the learning rate
-            self.scheduler.step(val_total_loss)   
+            self.scheduler.step(val_total_loss) ##TODO - could also modify based only on the validation loss-vid metric    
 
     @torch.no_grad()
     def test(self, loader_te, mode="test"):
@@ -543,7 +557,9 @@ class Network(object):
                     torch.log(torch.exp(torch.sum(self.pos_e*similarity_matrix,dim=2))+
                     torch.sum(self.neg_e*torch.exp(self.neg_e*similarity_matrix),dim=2)), dim = 1)
 
-                #entropy_attention = entropy_attention * 0
+                # remove video entropy loss
+                if not self.config["video_entropy"]:
+                    entropy_attention = entropy_attention * 0
                 
                 # Alignment between video and multimodal attention weights 
                 frame_att_loss_weight = self.config["frame_att_loss_weight"]
@@ -557,9 +573,12 @@ class Network(object):
                     att_weight = torch.log(att_weight)
                     frame_att_loss = F.kl_div(input=att_weight, target=ca_att_weight, log_target=False, reduction='mean')
                 else:
-                    frame_att_loss = 0
+                    frame_att_loss = torch.zeros(1).cuda()
 
                 # Coteaching + CE losses
+                loss_vid_weight = self.config["loss_vid_weight"]
+                loss_tab_weight = self.config["loss_tab_weight"]
+
                 if self.config["coteaching"] == True:
                     if self.config['abstention'] == True:
                         loss_vid, loss_tab = loss_coteaching(pred_AS, ca_preds, target_AS, forget_rate, self.abstention_loss)
@@ -569,11 +588,11 @@ class Network(object):
                     loss_vid = self._get_loss(pred_AS, target_AS, self.num_classes_AS)
                     loss_tab = self._get_loss(ca_preds, target_AS, self.num_classes_AS)
          
-                loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid + loss_tab + 0.05*(torch.mean(entropy_attention)) + \
+                loss = frame_att_loss_weight*frame_att_loss + 0.5*ca_emb_loss + loss_vid_weight*loss_vid + loss_tab_weight*loss_tab + 0.05*(torch.mean(entropy_attention)) + \
                         0.1*torch.mean(npair_loss) + 0.05*(torch.mean(multimodal_att_entropy))
                 losses += [loss]
-                losses_vid += [loss_vid]
-                losses_tab += [loss_tab]
+                losses_vid += [loss_vid_weight*loss_vid]
+                losses_tab += [loss_tab_weight*loss_tab]
                 losses_ca_emb += [0.5*ca_emb_loss]
                 losses_npair += [0.1*torch.mean(npair_loss)]
                 losses_frame_att += [frame_att_loss_weight*frame_att_loss]
@@ -638,14 +657,14 @@ class Network(object):
             return loss_avg
     
     @torch.no_grad()
-    def test_comprehensive(self, loader, mode="test",record_embeddings=False):
+    def test_comprehensive(self, loader, split, mode="test",record_embeddings=False):
         """Logs the network outputs in dataloader
         computes per-patient preds and outputs result to a DataFrame"""
         print('NOTE: test_comprehensive mode uses batch_size=1 to correctly display metadata')
         # Choose which model to evaluate.
         if mode=="test":
-            #self._restore(self.bestmodel_acc)
-            self._restore(self.bestmodel_loss)
+            self._restore(self.bestmodel_acc)
+            #self._restore(self.bestmodel_loss)
         # Switch the model into eval mode.
         self.model.eval()
         fn, patient, echo, view, age, lv, as_label,bicuspid = [], [], [], [], [], [],[], []
@@ -717,7 +736,8 @@ class Network(object):
              }
         df = pd.DataFrame(data=d)
         # save the dataframe
-        test_results_file = os.path.join(self.log_dir, mode+".csv") 
+        # test_results_file = os.path.join(self.log_dir, mode+".csv") 
+        test_results_file = os.path.join(self.log_dir, split + "_fixed" +".csv") 
         df.to_csv(test_results_file)
         if record_embeddings:
             embeddings = np.array(embeddings)

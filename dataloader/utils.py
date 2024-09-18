@@ -190,7 +190,7 @@ def load_as_data(csv_path: str,
         print("Processing data from: " + csv_path + "\n")
         print("Dropping the following columns: " + str(drop_cols) + "\n")
         print("Using " + str(num_ex) + " examples with test split of " + str(test_split) + ".\n")
-        print("Random seed is " + str(random_seed) + ".\n")
+        #print("Random seed is " + str(random_seed) + ".\n")
         print("Scaling features? " + str(scale_feats) + "\n")
 
         #Replace any -1 values with NaNs for imputing

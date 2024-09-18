@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import random 
 import math
 import numpy as np
 import torch
@@ -9,6 +10,16 @@ from tqdm import tqdm
 import faiss
 import torch.nn as nn
 
+def set_seed(seed):
+    """
+    Set up random seed number
+    """
+    # # Setup random seed
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.random.manual_seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def adjust_learning_rate(args, optimizer, epoch):
     lr = args.learning_rate

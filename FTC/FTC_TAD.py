@@ -284,10 +284,10 @@ class FTC(nn.Module):
         mask = torch.ones((nB, nF), dtype=torch.bool).cuda()
         #embeddings_reshaped = embeddings_reshaped.cuda()
         samples = NestedTensor(embeddings_reshaped, mask)
-        pos = self.pos_embed(samples).cuda()
+        pos = self.pos_embed(samples).cuda() #(bs, c, t)
         
         #  B x F x Emb
-        outputs = self.transformer([embeddings_reshaped],[pos],[mask])
+        outputs = self.transformer([embeddings_reshaped],[pos],[mask]) #(bs, emb, F)
 
         #integrate tab data
         if split=='Train':

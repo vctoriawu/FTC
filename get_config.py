@@ -2,12 +2,14 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
+    config['seed'] = 42
     config['mode'] = "train"
     config['use_wandb'] = True
     config['use_cuda'] = True
+    config['save_videos'] = False #TODO 
     config['log_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/"
-    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4cls_0.5kl_reg-1e4"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4cls_0.5kl_reg-1e4"
+    config['model_load_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/kl_reg-vid_no-entropy_fixed"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/kl_reg-vid_no-entropy_fixed"
 
     # Hyperparameters for dataset. 
     config['view'] = 'all' # all/plax/psax
@@ -44,9 +46,14 @@ def get_config():
     config['abstention'] = False
     config["coteaching"] = True
     config['multimodal'] = "fttrans" # clip/mlp/fttrans
+    config['l2_reg_method'] = 'reg_on_vid_only' # reg_on_vid_only/reg_on_all/no_reg
+    config['lr_scheduler'] = 'cosine_annealing' # reduce_on_plateau/cosine_annealing
+    config["loss_vid_weight"] = 1
+    config["loss_tab_weight"] = 1
     
-    config["frame_attention_loss"] = "kl_div" # cosine_sim
-    config["frame_att_loss_weight"] = 0.5
+    config["frame_attention_loss"] = 'kl_div' # kl_div/cosine_sim/none
+    config["frame_att_loss_weight"] = 0.5 #if frame_attention_loss='none', this will have no impact
+    config["video_entropy"] = False
     config["multimodal_att_entropy"] = False
 
     # Hyperparameters for training.

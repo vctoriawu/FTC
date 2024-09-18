@@ -1,6 +1,6 @@
 #import os
 from os.path import join
-from random import randint
+from random import randint, uniform
 from typing import List, Dict, Union#, Optional, Callable, Iterable
 import numpy as np
 import pandas as pd
@@ -17,10 +17,14 @@ from random import seed
 import torch.nn as nn
 import random
 from dataloader.utils import load_as_data, preprocess_as_data, fix_leakage
+import imageio.v2 as imageio
+import pdb
+import cv2
+from einops import rearrange, repeat
 
-seed(42)
-torch.random.manual_seed(42)
-np.random.seed(42)
+# seed(42)
+# torch.random.manual_seed(42)
+# np.random.seed(42)
 
 img_path_dataset = '/workspace/data/as_tom/annotations-all.csv'
 tab_path_dataset = '/workspace/data/as_tom/finetuned_df.csv'
@@ -104,13 +108,19 @@ def get_as_dataloader(config, split, mode):
         tra = False
         bsize = 1
         show_info = True
+    elif mode=='train_analysis':
+        flip=config['flip_rate']
+        tra = True
+        bsize = 1
+        show_info = True
         
     if show_info:
         assert bsize==1, "To show per-data info batch size must be 1"
-    if config['model'] == 'slowfast':
-        fr = 32
-    else:
-        fr = 16
+    # if config['model'] == 'slowfast':
+    #     fr = 32
+    # else:
+    #     fr = 16
+    fr = 32
     
     # read in the data directory CSV as a pandas dataframe
     raw_dataset = pd.read_csv(img_path_dataset)
@@ -165,6 +175,7 @@ def get_as_dataloader(config, split, mode):
         
     dset = AorticStenosisDataset(img_path_dataset=dataset, 
                                 tab_dataset=tab_dataset,
+                                save_videos=config['save_videos'],
                                 split=split,
                                 transform=tra,
                                 normalize=True,
@@ -193,6 +204,7 @@ class AorticStenosisDataset(Dataset):
                  label_scheme,
                  img_path_dataset,
                  tab_dataset,
+                 save_videos,
                  split: str = 'train',
                  transform: bool = True, normalize: bool = True, 
                  frames: int = 16, resolution: int = 224,
@@ -207,7 +219,15 @@ class AorticStenosisDataset(Dataset):
         self.hr_srd = hr_std
         self.scheme = label_scheme
         self.cine_loader = get_loader(cine_loader)
-        self.dataset = img_path_dataset
+        self.get_nvideos = 0
+        self.save_videos = save_videos
+        
+        #From ProtoASNet
+        self.interval_unit = "cycle"
+        self.interval_quant = 1.0
+        dataset, _ = compute_intervals(img_path_dataset, self.interval_unit, self.interval_quant)
+        self.dataset = dataset
+
         self.tab_dataset = tab_dataset
         self.frames = frames
         self.resolution = (resolution, resolution)
@@ -276,6 +296,16 @@ class AorticStenosisDataset(Dataset):
         start = randint(0, max(0, len(vid) - length))
         return vid[start:start + length]
     
+    #@staticmethod
+    def get_random_interval_protoasnet(self, vid_length, length):
+        if length > vid_length:
+            return 0, vid_length
+        elif self.split == "test":
+            return 0, length
+        else:
+            start = randint(0, vid_length - length)
+            return start, start + length
+    
     # expands one channel to 3 color channels, useful for some pretrained nets
     @staticmethod
     def gray_to_gray3(in_tensor):
@@ -285,12 +315,17 @@ class AorticStenosisDataset(Dataset):
     # normalizes pixels based on pre-computed mean/std values
     @staticmethod
     def bin_to_norm(in_tensor):
+        """
+        normalizes the input tensor
+        :param in_tensor: needs to be already in range of [0,1]
+        """
         # in_tensor is 1xTxHxW
         m = 0.099
         std = 0.171
         return (in_tensor-m)/std
 
     def __getitem__(self, item):
+        #pdb.set_trace()
         data_info = self.dataset.iloc[item]
 
         #get associated tabular data based on echo ID
@@ -307,12 +342,25 @@ class AorticStenosisDataset(Dataset):
         elif folder == 'round2':
             pass
             
-        window_length = 60000 / (lognormvariate(self.hr_mean, self.hr_srd) * data_info['frame_time'])
-        cine = self.get_random_interval(cine_original, window_length)
-        #print(cine.shape)
-        cine = resize(cine, (32, *self.resolution))
-        cine = torch.tensor(cine).unsqueeze(0)
-        
+        # window_length = 60000 / (lognormvariate(self.hr_mean, self.hr_srd) * data_info['frame_time'])
+        # cine = self.get_random_interval(cine_original, window_length)
+        #print(f"og cine shape: {cine_original.shape}\nrandom cine clip shape: {cine.shape}\n")
+        ttd = 0.2
+        window_length = max(int(data_info["window_size"] * uniform(1 - ttd, 1 + ttd)), 1)
+        start_frame, end_frame = self.get_random_interval_protoasnet(data_info["frames"], window_length)
+        cine = cine_original[start_frame:end_frame]
+        cine = resize(cine, (self.frames, *self.resolution)) 
+        cine = torch.tensor(cine).unsqueeze(0) #[1, 32, H, W]
+
+        # save a sample of a video 
+        if self.save_videos:
+            if self.get_nvideos < 1:
+                study_num = int(study_num)
+                output_path = f'/workspace/miccai2024/videos/{study_num}.avi' # Output file name and format
+                save_videos_as_avi(video_tensor=cine, video_path=output_path)
+                self.get_nvideos +=1
+                print(f"Saving video...")
+
         # storing labels as a dictionary will be in a future update
         if folder == 'round2':
             labels_B = torch.tensor(int(data_info['Bicuspid']))
@@ -359,6 +407,87 @@ class AorticStenosisDataset(Dataset):
             ret = (cine, tab_info, labels_AS, labels_B, di, cine_original)
 
         return ret
+
+def save_videos_as_avi(video_tensor, video_path, frame_rate=30):
+    video = rearrange(video_tensor, 'c t h w -> t h w c')
+    if video.shape[-1] == 1:
+        video = repeat(video, 't h w 1 -> t h w c', c=3)
+    # Get the batch size, time_steps, height, width, channels from the tensor
+    time_steps, height, width, _ = video.shape
+    out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'MJPG'), frame_rate, (width, height))
+    for t in range(time_steps):
+        frame = (video[t]*255).cpu().numpy().astype(np.uint8) if isinstance(video, torch.Tensor) \
+            else (video[t]*255).astype(np.uint8)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        out.write(frame)
+    out.release()    
+    
+def compute_intervals(df, unit, quantity):
+    """
+    Calculates the number of sub-videos from each video in the dataset
+    Saves the frame window for each sub-video in a separate sheet
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        dataframe object containing frame rate, heart rate, etc.
+    unit : str
+        unit for interval retrieval, image/second/cycle
+    quantity :
+        quantity for interval retrieval,
+        eg. 1.3 with "cycle" means each interval should be 1.3 cycles
+
+    Returns
+    -------
+    df : pd.DataFrame
+        updated dataframe containing num_intervals and window_size
+    df_intervals: pd.DataFrame
+        dataframe containing mapping between videos and window start/end frames
+
+    """
+    ms = df["frame_time"]
+    hr = df["heart_rate"]
+    if unit == "image":
+        if int(quantity) < 1:
+            raise ValueError("Must draw >= 1 image per video")
+        df["window_size"] = int(quantity)
+    elif unit == "second":
+        df["window_size"] = (quantity * 1000 / ms).astype("int32")
+    elif unit == "cycle":
+        df["window_size"] = (quantity * 60000 / ms / hr).astype("int32")
+    else:
+        raise ValueError(f"Unit should be image/second/cycle, got {unit}")
+    # if there are any window sizes of zero or less, raise an exception
+    if len(df[df["window_size"] < 1]) > 0:
+        raise Exception("Dataloader: Detected proposed window size of 0, exiting")
+
+    df["num_intervals"] = (df["frames"] / df["window_size"]).astype("int32")
+
+    video_idx, interval_idx, start_frame, end_frame = [], [], [], []
+    for i in range(len(df)):
+        video_info = df.iloc[i]
+        if video_info["num_intervals"] == 0:
+            video_idx.append(i)
+            interval_idx.append(0)
+            start_frame.append(0)
+            end_frame.append(video_info["frames"])
+        else:
+            n_intervals = video_info["num_intervals"]
+            w_size = video_info["window_size"]
+            for j in range(n_intervals):
+                video_idx.append(i)
+                interval_idx.append(j)
+                start_frame.append(j * w_size)
+                end_frame.append((j + 1) * w_size)
+    d = {
+        "video_idx": video_idx,
+        "interval_idx": interval_idx,
+        "start_frame": start_frame,
+        "end_frame": end_frame,
+    }
+    df_interval = pd.DataFrame.from_dict(d)
+
+    return df, df_interval
 
 # extra transformation for slowfast architecture    
 class PackPathway(torch.nn.Module):
