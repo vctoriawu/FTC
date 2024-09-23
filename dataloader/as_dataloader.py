@@ -69,7 +69,7 @@ class_labels: Dict[str, List[str]] = {
 }
 
     
-def get_as_dataloader(config, split, mode):
+def get_as_dataloader(config, split, mode, dfr=False):
     '''
     Uses the configuration dictionary to instantiate AS dataloaders
 
@@ -100,8 +100,8 @@ def get_as_dataloader(config, split, mode):
     elif mode=='val':
         flip = 0.0
         tra = False
-        #bsize = config['batch_size']
-        bsize = 12
+        bsize = config['batch_size']
+        #bsize = 12
         show_info = False
     elif mode=='test':
         flip = 0.0
@@ -172,6 +172,15 @@ def get_as_dataloader(config, split, mode):
         dataset = fix_leakage(df=raw_dataset, df_subset=dataset, split=split)
     elif split == 'test':
         dataset = fix_leakage(df=raw_dataset, df_subset=dataset, split=split)
+
+    #for DFR
+    n_places = 2
+    y_ls = [scheme[x] for x in dataset['as_label']]
+    y_arr = np.array(y_ls) 
+    #add col for confounder_array/"p" (binary for bicuspid)
+    dataset["confounder_arr"] = dataset['Bicuspid'].values 
+    #add col for group_array
+    dataset["group_array"] = (y_arr * n_places + dataset["confounder_arr"]).astype('int')
         
     dset = AorticStenosisDataset(img_path_dataset=dataset, 
                                 tab_dataset=tab_dataset,
@@ -183,7 +192,8 @@ def get_as_dataloader(config, split, mode):
                                 return_info=show_info,
                                 contrastive_method = config['cotrastive_method'],
                                 flip_rate=flip,
-                                label_scheme = scheme)
+                                label_scheme = scheme,
+                                dfr=dfr)
     
     if mode=='train':
         if config['sampler'] == 'AS':
@@ -205,10 +215,11 @@ class AorticStenosisDataset(Dataset):
                  img_path_dataset,
                  tab_dataset,
                  save_videos,
+                 dfr,
                  split: str = 'train',
                  transform: bool = True, normalize: bool = True, 
                  frames: int = 16, resolution: int = 224,
-                 cine_loader: str = 'mat_loader', return_info: bool = False, #TODO
+                 cine_loader: str = 'mat_loader', return_info: bool = False, 
                  contrastive_method: str = 'CE',
                  flip_rate: float = 0.3, min_crop_ratio: float = 0.8, 
                  hr_mean: float = 4.237, hr_std: float = 0.1885,
@@ -221,6 +232,8 @@ class AorticStenosisDataset(Dataset):
         self.cine_loader = get_loader(cine_loader)
         self.get_nvideos = 0
         self.save_videos = save_videos
+        self.dfr = dfr
+        self.n_groups = img_path_dataset["group_array"].nunique()
         
         #From ProtoASNet
         self.interval_unit = "cycle"
@@ -333,6 +346,10 @@ class AorticStenosisDataset(Dataset):
         tab_info = self.tab_dataset.loc[int(study_num)]
         tab_info = torch.tensor(tab_info.values, dtype=torch.float32)
 
+        if self.dfr:
+            group_arr = data_info["group_array"]
+            places_arr = data_info["confounder_arr"]
+
         cine_original = self.cine_loader(data_info['path'])
 
         #if raw_dataset comes from all_cines in nas drive...
@@ -385,7 +402,7 @@ class AorticStenosisDataset(Dataset):
             if (self.contrstive == 'SupCon' or self.contrstive =='SimCLR') and (self.split == 'train' or self.split =='all'):
                 cine_aug = self.bin_to_norm(cine_aug)  
 
-        cine = self.gray_to_gray3(cine)
+        cine = self.gray_to_gray3(cine) #[3, F, H, W]
         cine = cine.float()
         
         if (self.contrstive == 'SupCon' or self.contrstive =='SimCLR') and (self.split == 'train' or self.split =='train_all'):
@@ -399,12 +416,18 @@ class AorticStenosisDataset(Dataset):
             ret = ([cine,cine_aug], tab_info, labels_AS, labels_B)
        
         else:
-            ret = (cine, tab_info, labels_AS, labels_B)
+            if self.dfr:
+                ret = (cine, tab_info, labels_AS, labels_B), (places_arr, group_arr) 
+            else:
+                ret = (cine, tab_info, labels_AS, labels_B)
         if self.return_info:
             di = data_info.to_dict()
             di['window_length'] = window_length
             di['original_length'] = cine_original.shape[1]
-            ret = (cine, tab_info, labels_AS, labels_B, di, cine_original)
+            if self.dfr:
+                ret = (cine, tab_info, labels_AS, labels_B, di, cine_original), (places_arr, group_arr) 
+            else:
+                ret = (cine, tab_info, labels_AS, labels_B, di, cine_original)
 
         return ret
 
