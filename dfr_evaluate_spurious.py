@@ -20,9 +20,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from utils import Logger, evaluate, get_y_p
 
-from network import Network
+from dfr_network import Network
 from dfr_configs import get_config
 from dataloader.as_dataloader import get_as_dataloader
+from dataloader.as_dataloader_dfr import get_dfr_dataloader
 from get_model import get_model
 from random import randint
 from utils import validation_constructive, set_seed
@@ -247,7 +248,6 @@ def dfr_on_validation_eval(
 
     return test_accs, test_mean_acc, train_accs
 
-
 # def dfr_train_subset_tune(
 #         all_embeddings, all_y, all_g, preprocess=True,
 #         learn_class_weights=False):
@@ -410,41 +410,36 @@ def restore_model(model, pt_file):
 
     return model
 
+def reinitialize_weights(module): #TODO
+    if isinstance(module, nn.Linear):  # Or other layers you want to reinitialize
+        module.reset_parameters()  # Or another initialization method
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-    #set up configs
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     configs = get_config()
 
     if configs["seed"]:
         set_seed(configs["seed"])
-    
     if configs['use_wandb']:
-        run = wandb.init(project="as_tab", entity="rcl_stroke", config = configs, name = 'dfr_trial')
+        run = wandb.init(project="as_tab", entity="rcl_stroke", config = configs, name = 'dfr_mlp')
 
-    logs_dir = configs["dfr_result_path"] + configs["experiment_name"]
-    logs_path = pathlib.Path(logs_dir)
+    configs["logs_dir"] = configs["dfr_result_path"] + configs["experiment_name"]
+    logs_path = pathlib.Path(configs["logs_dir"])
     logs_path.mkdir(parents=True, exist_ok=True)
 
     ## Load data
     dataloader_tr = get_as_dataloader(configs, split='train', dfr=True, mode='train') 
     dataloader_va = get_as_dataloader(configs, split='val', dfr=True, mode='val')
-    dataloader_test = get_as_dataloader(configs, split='test', dfr=True, mode='val')
-    dataloader_te = get_as_dataloader(configs, split='test', dfr=True, mode='test')
+    dataloader_te = get_as_dataloader(configs, split='test', dfr=True, mode='test') 
+    dataloader_trainval = get_dfr_dataloader(configs, split='train', dfr=True, mode='train_val') 
+    dataloader_test = get_dfr_dataloader(configs, split='train', dfr=True, mode='test') 
 
-    # Load models
-    ## MultiASNet 
+    # Load MultiASNet 
     model = get_model(configs)
-    bestmodel_path = pathlib.Path(configs["best_model_dir"])
-    #bestmodel_path = os.path.join(configs["best_model_dir"])
+    bestmodel_path = pathlib.Path(configs["pretrained_model_dir"])
     model = restore_model(model, bestmodel_path)
     model.cuda()
     model.eval()
-
-    ## Classifier
-    # classifier = mlp_classifier(embedding_dim=1024, n_classes=args.num_classes)
-    # classifier.cuda()
 
     # Evaluate model
     print("Base Model")
@@ -456,62 +451,88 @@ if __name__ == "__main__":
     # print(base_model_results)
     # print() #TODO - comment out for now
 
-    model.eval()
+    model.eval() 
 
-    all_embeddings = {}
-    all_att_weights = {}
-    all_y, all_p, all_g = {}, {}, {}
-    all_views, all_echo_ids = {}, {}
-    for name, loader in [("train", dataloader_tr), ("test", dataloader_te), ("val", dataloader_va)]:
-        all_embeddings[name], all_att_weights[name] = [], []
-        all_y[name], all_p[name], all_g[name] = [], [], []
-        all_views[name], all_echo_ids[name] = [], []
-        for data, dfr_info in tqdm.tqdm(loader):
-            if name=="test":
-                x, _, y, _, di, _ = data
-            else:
-                x, _, y, _ = data
-            p, g = dfr_info
-            with torch.no_grad():
-                (embeddings, att_weights) = get_embed(model, x.cuda())
-                all_embeddings[name].append(embeddings.detach().cpu().numpy()) #[[B,F,E], [B,F,E], ...]
-                all_att_weights[name].append(att_weights.detach().cpu().numpy()) 
-                all_y[name].append(y.detach().cpu().numpy())
-                all_g[name].append(g.detach().cpu().numpy())
-                all_p[name].append(p.detach().cpu().numpy())
+    if configs["classifier"]=='mlp': 
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in model.aorticstenosispred.parameters():
+            param.requires_grad = True
+        ## Check that the right layers are trainable/frozen 
+        # for name, param in model.named_parameters():
+        #     print(f'Layer: {name} | requires_grad: {param.requires_grad}')
+        # print("Before re-initialization:")
+        # print("Weights:", model.aorticstenosispred[0].weight)
+        # print("Biases:", model.aorticstenosispred[0].bias)
+        model.aorticstenosispred.apply(reinitialize_weights)
+        # print("\nAfter re-initialization:")
+        # print("Weights:", model.aorticstenosispred[0].weight)
+        # print("Biases:", model.aorticstenosispred[0].bias)
+
+        # set up train and test
+        dataloaders_dict = {"train": dataloader_trainval, "test": dataloader_test}
+        net = Network(model, configs)
+
+        if configs["do_train"]:
+            net.train(dataloaders_dict["train"], dataloaders_dict["test"])
+        if configs["do_comprehensive_test"]:
+            net.test_comprehensive(dataloaders_dict["test"], mode='test')
+
+        #test_accs, test_mean_acc, train_accs = net.test_comprehensive(dataloaders_dict["test"], mode='test') #TODO - comment out for now
+
+    else: #logistic_reg
+        all_embeddings = {}
+        all_att_weights = {}
+        all_y, all_p, all_g = {}, {}, {}
+        all_views, all_echo_ids = {}, {}
+        for name, loader in [("train", dataloader_tr), ("test", dataloader_te), ("val", dataloader_va)]:
+            all_embeddings[name], all_att_weights[name] = [], []
+            all_y[name], all_p[name], all_g[name] = [], [], []
+            all_views[name], all_echo_ids[name] = [], []
+            for data, dfr_info in tqdm.tqdm(loader):
                 if name=="test":
-                    all_views[name].append(di['view'])
-                    all_echo_ids[name].append(di['Echo ID#'].detach().cpu().numpy())
-        all_embeddings[name] = np.vstack(all_embeddings[name]) #[n_train,F,E]
-        all_att_weights[name] = np.vstack(all_att_weights[name]) #[n_train,F,E]
-        all_y[name] = np.concatenate(all_y[name])
-        all_g[name] = np.concatenate(all_g[name])
-        all_p[name] = np.concatenate(all_p[name])
-        if name=="test":
-            all_views[name] = np.concatenate(all_views[name])
-            all_echo_ids[name] = np.concatenate(all_echo_ids[name])
+                    x, _, y, _, di, _ = data
+                else:
+                    x, _, y, _ = data
+                p, g = dfr_info
+                with torch.no_grad():
+                    (embeddings, att_weights) = get_embed(model, x.cuda())
+                    all_embeddings[name].append(embeddings.detach().cpu().numpy()) #[[B,F,E], [B,F,E], ...]
+                    all_att_weights[name].append(att_weights.detach().cpu().numpy()) 
+                    all_y[name].append(y.detach().cpu().numpy())
+                    all_g[name].append(g.detach().cpu().numpy())
+                    all_p[name].append(p.detach().cpu().numpy())
+                    if name=="test":
+                        all_views[name].append(di['view'])
+                        all_echo_ids[name].append(di['Echo ID#'].detach().cpu().numpy())
+            all_embeddings[name] = np.vstack(all_embeddings[name]) #[n_train,F,E]
+            all_att_weights[name] = np.vstack(all_att_weights[name]) #[n_train,F,E]
+            all_y[name] = np.concatenate(all_y[name])
+            all_g[name] = np.concatenate(all_g[name])
+            all_p[name] = np.concatenate(all_p[name])
+            if name=="test":
+                all_views[name] = np.concatenate(all_views[name])
+                all_echo_ids[name] = np.concatenate(all_echo_ids[name])
 
+        # DFR on validation
+        print("DFR on validation")
+        dfr_val_results = {}
+        all_info = (all_embeddings, all_att_weights, all_y, all_g, all_p, all_views, all_echo_ids)
+        c, w1, w2, w3, w4 = dfr_on_validation_tune(
+            all_info,
+            balance_val=configs["balance_dfr_val"], add_train=not configs["notrain_dfr_val"])
+        dfr_val_results["best_hypers"] = (c, w1, w2, w3, w4)
+        print("Hypers:", (c, w1, w2, w3, w4))
+        test_accs, test_mean_acc, train_accs = dfr_on_validation_eval( 
+                c, w1, w2, w3, w4, all_info, logs_path,
+            balance_val=configs["balance_dfr_val"], add_train=not configs["notrain_dfr_val"])
 
-    # DFR on validation
-    print("DFR on validation")
-    dfr_val_results = {}
-    all_info = (all_embeddings, all_att_weights, all_y, all_g, all_p, all_views, all_echo_ids)
-    
-    c, w1, w2, w3, w4 = dfr_on_validation_tune(
-        all_info,
-        balance_val=configs["balance_dfr_val"], add_train=not configs["notrain_dfr_val"])
-    dfr_val_results["best_hypers"] = (c, w1, w2, w3, w4)
-    print("Hypers:", (c, w1, w2, w3, w4))
-
-    test_accs, test_mean_acc, train_accs = dfr_on_validation_eval( 
-            c, w1, w2, w3, w4, all_info, logs_path,
-        balance_val=configs["balance_dfr_val"], add_train=not configs["notrain_dfr_val"])
     dfr_val_results["test_accs"] = test_accs
     dfr_val_results["train_accs"] = train_accs
     dfr_val_results["test_worst_acc"] = np.min(test_accs)
     dfr_val_results["test_mean_acc"] = test_mean_acc
     print(dfr_val_results)
-    print()
+    print() #TODO - comment out for now
 
     # # DFR on train subsampled
     # print("DFR on train subsampled")
@@ -533,9 +554,9 @@ if __name__ == "__main__":
     all_results = {}
     all_results["base_model_results"] = base_model_results
     all_results["dfr_val_results"] = dfr_val_results
-    #all_results["dfr_train_results"] = dfr_train_results
+    ##all_results["dfr_train_results"] = dfr_train_results
     print(all_results)
 
-    pickle_file = logs_dir+"/dfr_multiasnet.pkl"
+    pickle_file = configs["logs_dir"] + "/dfr_multiasnet.pkl"
     with open(pickle_file, 'wb') as f: 
-        pickle.dump(all_results, f)
+        pickle.dump(all_results, f) #TODO - comment out  for now

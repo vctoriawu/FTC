@@ -2,18 +2,21 @@ def get_config():
     """Get the hyperparameter configuration."""
     config = {}
     
-    config['experiment_name'] = "trial" 
+    config['experiment_name'] = "4_class_coteaching_logreg_dfr" 
     config['seed'] = 42
     config['mode'] = "train"
+    config["do_train"] = False
+    config["do_comprehensive_test"] = True
     config['use_wandb'] = False
     config['use_cuda'] = True
     config['save_videos'] = False 
     config['dfr_result_path'] = "/workspace/miccai2024_savedmodels/FTC/logs/dfr_logs/"
-    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/kl_reg-vid_no-entropy_fixed/best_model_acc.pth"
+    config['best_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/dfr_logs/4_class_coteaching"
+    config['pretrained_model_dir'] = "/workspace/miccai2024_savedmodels/FTC/logs/4_class_coteaching/best_model_acc.pth"
     
     #DFR configs
     config["n_places"] = 2 #The unique values for the confounding attribute (bicuspid, not bicuspid)
-    config["classifier"] = "logistic_reg" #logistic_reg/ftc-tad
+    config["classifier"] = "logistic_reg" #logistic_reg/mlp
     config["balance_dfr_val"] = True #Subset validation to have equal groups for DFR(Val)
     config["notrain_dfr_val"] = True #Do not add train data for DFR(Val)
     config["tune_class_weights_dfr_train"] = False #do not use if you do not want to tune the class weights
@@ -51,7 +54,7 @@ def get_config():
     config['restore'] = True
     config['loss_type'] = 'cross_entropy' # cross_entropy/evidential/laplace_cdf/SupCon/SimCLR
     config['abstention'] = False
-    config["coteaching"] = True
+    config["coteaching"] = False
     config['multimodal'] = "fttrans" # clip/mlp/fttrans
     config['l2_reg_method'] = 'no_reg' # reg_on_vid_only/reg_on_all/no_reg
     config['lr_scheduler'] = 'cosine_annealing' # reduce_on_plateau/cosine_annealing
@@ -65,8 +68,8 @@ def get_config():
 
     # Hyperparameters for training.
     config['batch_size'] = 16
-    config['num_epochs'] = 100 #110
-    config['lr'] = 1e-4  #1e-4 for Resnet2+1D, 1e-5 for FTC
+    config['num_epochs'] = 20 #110
+    config['lr'] = 1e-5  #1e-4 for Resnet2+1D, 1e-5 for FTC
     config['sampler'] = 'AS' # imbalanced sampling based on AS/bicuspid/random
  
     return config
